@@ -26,8 +26,14 @@ jobs:
         with:
           node-version: 20
 
+      - name: Debug Environment
+        run: |
+          node -v
+          npm -v
+
       - name: Install Dependencies
-        run: npm install --no-audit --no-fund
+        run: npm install --verbose --no-audit --no-fund
+
 
 
       - name: Generate Prisma Client
