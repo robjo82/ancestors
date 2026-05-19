@@ -1,0 +1,76 @@
+datasource db {
+  provider = "sqlite"
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model Person {
+  id             String    @id @default(uuid())
+  firstName      String
+  lastName       String
+  birthName      String?
+  gender         String    // "M" = Male, "F" = Female, "U" = Unknown
+  birthDate      String?
+  birthPlace     String?
+  baptismDate    String?
+  baptismPlace   String?
+  deathDate      String?
+  deathPlace     String?
+  burialDate     String?
+  burialPlace    String?
+  occupation     String?
+  notes          String?
+  avatarUrl      String?
+  sources        String?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  // Self-referential parenting relationships
+  fatherId       String?
+  motherId       String?
+  father         Person?   @relation("FatherOf", fields: [fatherId], references: [id], onDelete: SetNull)
+  mother         Person?   @relation("MotherOf", fields: [motherId], references: [id], onDelete: SetNull)
+  
+  fatherOf       Person[]  @relation("FatherOf")
+  motherOf       Person[]  @relation("MotherOf")
+
+  // Unions/Marriages
+  unionsPartner1 Union[]   @relation("Partner1")
+  unionsPartner2 Union[]   @relation("Partner2")
+
+  // Documents and photos
+  media          Media[]
+}
+
+model Union {
+  id           String   @id @default(uuid())
+  partner1Id   String
+  partner2Id   String
+  type         String   // "MARRIAGE", "PARTNERSHIP", "OTHER"
+  weddingDate  String?
+  weddingPlace String?
+  divorceDate  String?
+  isDivorced   Boolean  @default(false)
+  notes        String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  partner1     Person   @relation("Partner1", fields: [partner1Id], references: [id], onDelete: Cascade)
+  partner2     Person   @relation("Partner2", fields: [partner2Id], references: [id], onDelete: Cascade)
+}
+
+model Media {
+  id          String   @id @default(uuid())
+  personId    String
+  url         String   // Path or URL to the file
+  title       String
+  type        String   // "PHOTO", "DOCUMENT", "OTHER"
+  date        String?
+  description String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  person      Person   @relation(fields: [personId], references: [id], onDelete: Cascade)
+}

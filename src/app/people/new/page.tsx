@@ -1,0 +1,48 @@
+import { prisma } from "../../../lib/db";
+import NewPersonClientForm from "./NewPersonClientForm";
+
+export default async function NewPersonPage() {
+  // Récupérer la liste des pères et mères potentiels pour les menus déroulants
+  const males = await prisma.person.findMany({
+    where: { gender: "M" },
+    orderBy: [
+      { lastName: "asc" },
+      { firstName: "asc" },
+    ],
+    select: {
+      id: true,
+      firstName: true,
+      lastName: true,
+      birthDate: true,
+    },
+  });
+
+  const females = await prisma.person.findMany({
+    where: { gender: "F" },
+    orderBy: [
+      { lastName: "asc" },
+      { firstName: "asc" },
+    ],
+    select: {
+      id: true,
+      firstName: true,
+      lastName: true,
+      birthDate: true,
+    },
+  });
+
+  return (
+    <div style={{ maxWidth: "800px", margin: "0 auto", display: "flex", flexDirection: "column", gap: "1.5rem" }}>
+      <section className="glass" style={{ padding: "2rem" }}>
+        <h1 className="title-font" style={{ fontSize: "2rem", color: "var(--accent-gold)", fontWeight: 700, marginBottom: "0.25rem" }}>
+          ➕ Nouvel Individu
+        </h1>
+        <p style={{ color: "var(--text-secondary)" }}>
+          Ajoutez manuellement une nouvelle personne à votre arbre généalogique.
+        </p>
+      </section>
+
+      <NewPersonClientForm males={males} females={females} />
+    </div>
+  );
+}

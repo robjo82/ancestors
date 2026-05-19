@@ -1,0 +1,19 @@
+services:
+  ancestors:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: ancestors_app
+    ports:
+      - "3000:3000"
+    volumes:
+      # Volume persistant pour la base de données SQLite
+      - ancestors_db:/app/prisma
+      # Volume persistant pour toutes les photos et documents numérisés
+      - ancestors_media:/app/public/uploads
+    restart: unless-stopped
+
+volumes:
+  # Déclaration des volumes gérés par Docker/Portainer pour la sécurité des données
+  ancestors_db:
+  ancestors_media:

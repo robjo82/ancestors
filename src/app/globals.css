@@ -1,0 +1,446 @@
+/* Design System pour l'application "Ancestors" */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@400;500;600;700;800&display=swap');
+
+:root {
+  /* Palette de couleurs Premium HSL (Thème Sombre par défaut) */
+  --bg-primary: hsl(140, 20%, 6%);
+  --bg-secondary: hsl(140, 18%, 10%);
+  --bg-tertiary: hsl(140, 15%, 14%);
+  
+  --border-subtle: rgba(255, 255, 255, 0.06);
+  --border-focus: hsla(145, 63%, 42%, 0.4);
+  
+  --accent-emerald: hsl(145, 63%, 42%);
+  --accent-emerald-glow: hsla(145, 63%, 42%, 0.15);
+  --accent-gold: hsl(43, 80%, 55%);
+  --accent-gold-glow: hsla(43, 80%, 55%, 0.15);
+  
+  --text-primary: hsl(0, 0%, 94%);
+  --text-secondary: hsl(140, 10%, 70%);
+  --text-muted: hsl(140, 8%, 50%);
+  
+  --glass-bg: rgba(15, 25, 18, 0.6);
+  --glass-border: rgba(255, 255, 255, 0.08);
+  --glass-shadow: rgba(0, 0, 0, 0.4);
+  
+  --font-sans: 'Inter', system-ui, sans-serif;
+  --font-title: 'Outfit', sans-serif;
+
+  --transition-smooth: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  --transition-fast: all 0.15s ease;
+}
+
+/* Thème Clair optionnel si l'utilisateur change ou si le système est en mode clair */
+@media (prefers-color-scheme: light) {
+  :root {
+    --bg-primary: hsl(40, 15%, 97%);
+    --bg-secondary: hsl(40, 12%, 94%);
+    --bg-tertiary: hsl(40, 10%, 90%);
+    
+    --border-subtle: rgba(0, 0, 0, 0.08);
+    --border-focus: hsla(145, 63%, 30%, 0.4);
+    
+    --accent-emerald: hsl(145, 63%, 32%);
+    --accent-emerald-glow: hsla(145, 63%, 32%, 0.1);
+    --accent-gold: hsl(40, 75%, 45%);
+    --accent-gold-glow: hsla(40, 75%, 45%, 0.1);
+    
+    --text-primary: hsl(140, 25%, 12%);
+    --text-secondary: hsl(140, 15%, 30%);
+    --text-muted: hsl(140, 10%, 50%);
+    
+    --glass-bg: rgba(255, 255, 255, 0.7);
+    --glass-border: rgba(0, 0, 0, 0.08);
+    --glass-shadow: rgba(0, 0, 0, 0.08);
+  }
+}
+
+/* Reset de base */
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html, body {
+  height: 100%;
+  font-family: var(--font-sans);
+  background-color: var(--bg-primary);
+  color: var(--text-primary);
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  overflow-x: hidden;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+button, input, select, textarea {
+  font-family: inherit;
+  color: inherit;
+  background: none;
+  border: none;
+  outline: none;
+}
+
+/* Scrollbar personnalisée */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-track {
+  background: var(--bg-primary);
+}
+::-webkit-scrollbar-thumb {
+  background: var(--bg-tertiary);
+  border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--accent-emerald);
+}
+
+/* Animations globales */
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes scaleIn {
+  from { opacity: 0; transform: scale(0.96); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+/* Styles et utilitaires globaux */
+.glass {
+  background: var(--glass-bg);
+  backdrop-filter: blur(12px);
+  border: 1px solid var(--glass-border);
+  box-shadow: 0 8px 32px var(--glass-shadow);
+  border-radius: 16px;
+}
+
+.title-font {
+  font-family: var(--font-title);
+  letter-spacing: -0.02em;
+}
+
+/* Layout de base de l'application */
+.app-container {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+}
+
+.main-content {
+  flex: 1;
+  width: 100%;
+  max-width: 1400px;
+  margin: 0 auto;
+  padding: 2rem 1.5rem;
+  animation: fadeIn 0.4s ease-out;
+}
+
+/* Barre de navigation */
+.navbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 1rem 2rem;
+  border-bottom: 1px solid var(--border-subtle);
+  background-color: var(--bg-secondary);
+  position: sticky;
+  top: 0;
+  z-index: 100;
+}
+
+.navbar-logo {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  font-family: var(--font-title);
+  font-weight: 700;
+  font-size: 1.5rem;
+  color: var(--accent-gold);
+}
+
+.navbar-logo span {
+  color: var(--text-primary);
+}
+
+.navbar-links {
+  display: flex;
+  gap: 1.5rem;
+}
+
+.navbar-link {
+  font-size: 0.95rem;
+  font-weight: 500;
+  color: var(--text-secondary);
+  padding: 0.5rem 1rem;
+  border-radius: 8px;
+  transition: var(--transition-fast);
+}
+
+.navbar-link:hover, .navbar-link.active {
+  color: var(--text-primary);
+  background-color: var(--bg-tertiary);
+}
+
+.navbar-link.active {
+  border-bottom: 2px solid var(--accent-emerald);
+  border-radius: 8px 8px 0 0;
+  background-color: transparent;
+}
+
+/* Composants de formulaires */
+.input-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin-bottom: 1.25rem;
+}
+
+.input-label {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.input-field {
+  padding: 0.75rem 1rem;
+  border-radius: 8px;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-subtle);
+  color: var(--text-primary);
+  font-size: 0.95rem;
+  transition: var(--transition-fast);
+}
+
+.input-field:focus {
+  border-color: var(--accent-emerald);
+  box-shadow: 0 0 0 2px var(--border-focus);
+}
+
+/* Boutons */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  padding: 0.75rem 1.5rem;
+  border-radius: 8px;
+  font-weight: 600;
+  font-size: 0.95rem;
+  cursor: pointer;
+  transition: var(--transition-smooth);
+}
+
+.btn-primary {
+  background-color: var(--accent-emerald);
+  color: #ffffff;
+}
+
+.btn-primary:hover {
+  background-color: hsl(145, 63%, 35%);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px var(--accent-emerald-glow);
+}
+
+.btn-secondary {
+  background-color: var(--bg-tertiary);
+  border: 1px solid var(--border-subtle);
+  color: var(--text-primary);
+}
+
+.btn-secondary:hover {
+  background-color: var(--bg-secondary);
+  border-color: var(--text-muted);
+}
+
+.btn-accent {
+  background-color: var(--accent-gold);
+  color: #000000;
+}
+
+.btn-accent:hover {
+  background-color: hsl(43, 80%, 48%);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px var(--accent-gold-glow);
+}
+
+.btn-danger {
+  background-color: hsl(0, 75%, 45%);
+  color: white;
+}
+
+.btn-danger:hover {
+  background-color: hsl(0, 75%, 38%);
+  transform: translateY(-1px);
+}
+
+/* Cartes (Cards) */
+.card {
+  padding: 1.5rem;
+  background-color: var(--bg-secondary);
+  border: 1px solid var(--border-subtle);
+  border-radius: 12px;
+  transition: var(--transition-smooth);
+}
+
+.card:hover {
+  border-color: var(--border-focus);
+}
+
+/* Styles du Tableau de Bord */
+.dashboard-grid {
+  display: grid;
+  grid-template-columns: 2fr 1fr;
+  gap: 2rem;
+}
+
+@media (max-width: 968px) {
+  .dashboard-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.stats-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 1.25rem;
+  margin-bottom: 2rem;
+}
+
+.stat-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  padding: 1.5rem;
+}
+
+.stat-card-value {
+  font-family: var(--font-title);
+  font-size: 2.25rem;
+  font-weight: 800;
+  color: var(--accent-gold);
+  margin-bottom: 0.25rem;
+}
+
+.stat-card-label {
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+  font-weight: 500;
+}
+
+/* Footer */
+.footer {
+  text-align: center;
+  padding: 2rem;
+  color: var(--text-muted);
+  font-size: 0.85rem;
+  border-top: 1px solid var(--border-subtle);
+  background-color: var(--bg-secondary);
+  margin-top: auto;
+}
+
+/* Tab panes navigation in browser */
+.tab-pane {
+  display: none;
+}
+.tab-pane.active {
+  display: block;
+  animation: fadeIn 0.3s ease-out;
+}
+
+/* Highly polished printable booklet styling */
+@media print {
+  body, html {
+    background: #ffffff !important;
+    color: #000000 !important;
+    font-size: 11pt !important;
+  }
+
+  .navbar,
+  .footer,
+  .no-print,
+  .profile-actions,
+  button,
+  a.btn,
+  form,
+  .navbar-link,
+  .profile-tabs-content + section,
+  section.glass:has(button) {
+    display: none !important;
+  }
+
+  /* Force all tab panes to print sequentially in print mode */
+  .tab-pane {
+    display: block !important;
+    opacity: 1 !important;
+    page-break-inside: avoid;
+    margin-bottom: 3rem !important;
+    background: transparent !important;
+    border: none !important;
+    box-shadow: none !important;
+  }
+
+  /* Override glassmorphism for clean print */
+  .glass, .card {
+    background: #ffffff !important;
+    border: 1px solid #dddddd !important;
+    color: #000000 !important;
+    box-shadow: none !important;
+    border-radius: 8px !important;
+    padding: 1.5rem !important;
+    page-break-inside: avoid;
+  }
+
+  h1, h2, h3, h4, h5, h6, strong {
+    color: #000000 !important;
+    font-family: 'Outfit', sans-serif !important;
+  }
+
+  .title-font {
+    color: #000000 !important;
+  }
+
+  a {
+    color: #000000 !important;
+    text-decoration: underline !important;
+  }
+  
+  a.print-link {
+    text-decoration: none !important;
+    font-weight: bold !important;
+  }
+
+  .overview-layout {
+    display: flex !important;
+    flex-direction: column !important;
+    gap: 1.5rem !important;
+  }
+  
+  .civic-card {
+    margin-top: 1.5rem !important;
+    page-break-inside: avoid !important;
+  }
+
+  .children-grid {
+    display: grid !important;
+    grid-template-columns: 1fr 1fr !important;
+    gap: 1rem !important;
+  }
+
+  .media-tab-layout {
+    display: none !important;
+  }
+
+  @page {
+    margin: 1.5cm;
+  }
+}
