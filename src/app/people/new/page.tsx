@@ -1,6 +1,8 @@
 import { prisma } from "../../../lib/db";
 import NewPersonClientForm from "./NewPersonClientForm";
 
+export const dynamic = "force-dynamic";
+
 export default async function NewPersonPage() {
   // Récupérer la liste des pères et mères potentiels pour les menus déroulants
   const males = await prisma.person.findMany({

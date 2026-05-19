@@ -1,6 +1,8 @@
 import { prisma } from "../../lib/db";
 import InteractiveTreeClient from "./InteractiveTreeClient";
 
+export const dynamic = "force-dynamic";
+
 export default async function TreePage() {
   // Charger l'intégralité des individus et mariages de la base de données
   const people = await prisma.person.findMany({

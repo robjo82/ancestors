@@ -1,5 +1,7 @@
 import { prisma } from "../lib/db";
 
+export const dynamic = "force-dynamic";
+
 // Calcul de la profondeur maximale de l'arbre (nombre de générations)
 async function getGenerationDepth(): Promise<number> {
   try {

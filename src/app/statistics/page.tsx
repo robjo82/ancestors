@@ -1,5 +1,7 @@
 import { prisma } from "../../lib/db";
 
+export const dynamic = "force-dynamic";
+
 // Interface for demographic stats computed in Prisma
 interface DemographicStats {
   peopleCount: number;
