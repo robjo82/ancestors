@@ -109,6 +109,15 @@ button, input, select, textarea {
   to { opacity: 1; transform: scale(1); }
 }
 
+@keyframes pulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: .5; transform: scale(1.05); }
+}
+
+.pulsate {
+  animation: pulse 2s infinite ease-in-out;
+}
+
 /* Styles et utilitaires globaux */
 .glass {
   background: var(--glass-bg);

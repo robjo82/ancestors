@@ -2,6 +2,7 @@ import { prisma } from "../../../lib/db";
 import PersonProfileClient from "./PersonProfileClient";
 import { notFound, redirect } from "next/navigation";
 import { getCurrentUser, getActiveTreeIdForUser } from "../../../lib/auth";
+import { checkPersonConsistency } from "../../../utils/consistency";
 
 export default async function PersonProfilePage({
   params,
@@ -96,12 +97,46 @@ export default async function PersonProfilePage({
       lastName: true,
       gender: true,
       birthDate: true,
+      fatherId: true,
+      motherId: true,
     },
   });
 
   // Pères et mères possibles pour l'édition de filiation
   const potentialFathers = allPeople.filter((p: any) => p.gender === "M");
   const potentialMothers = allPeople.filter((p: any) => p.gender === "F");
+
+  // Calculer les avertissements de cohérence
+  const unionsForConsistency = unions.map((u: any) => ({
+    id: u.id,
+    weddingDate: u.weddingDate,
+    partnerId: u.partner?.id || "",
+    partnerName: u.partner ? `${u.partner.firstName} ${u.partner.lastName}` : "Conjoint inconnu"
+  }));
+
+  const childrenForConsistency = children.map((c: any) => ({
+    id: c.id,
+    firstName: c.firstName,
+    lastName: c.lastName,
+    birthDate: c.birthDate
+  }));
+
+  const consistencyWarnings = checkPersonConsistency(
+    {
+      id: person.id,
+      firstName: person.firstName,
+      lastName: person.lastName,
+      gender: person.gender,
+      birthDate: person.birthDate,
+      deathDate: person.deathDate,
+      fatherId: person.fatherId,
+      motherId: person.motherId,
+      father: person.father,
+      mother: person.mother,
+    },
+    unionsForConsistency,
+    childrenForConsistency
+  );
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "2rem" }}>
@@ -112,6 +147,7 @@ export default async function PersonProfilePage({
         allPeople={allPeople}
         potentialFathers={potentialFathers}
         potentialMothers={potentialMothers}
+        consistencyWarnings={consistencyWarnings}
       />
     </div>
   );

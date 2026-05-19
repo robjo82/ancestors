@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "../../../../lib/db";
 import { getCurrentUser, getActiveTreeIdForUser } from "../../../../lib/auth";
+import { checkPersonConsistency } from "../../../../utils/consistency";
 
 // GET /api/people/[id] - Récupère les détails d'un individu avec toutes ses relations
 export async function GET(
@@ -82,10 +83,43 @@ export async function GET(
       })),
     ];
     
+    // Calculer les avertissements de cohérence
+    const unionsForConsistency = unions.map((u: any) => ({
+      id: u.id,
+      weddingDate: u.weddingDate,
+      partnerId: u.partner?.id || "",
+      partnerName: u.partner ? `${u.partner.firstName} ${u.partner.lastName}` : "Conjoint inconnu"
+    }));
+
+    const childrenForConsistency = children.map((c: any) => ({
+      id: c.id,
+      firstName: c.firstName,
+      lastName: c.lastName,
+      birthDate: c.birthDate
+    }));
+
+    const consistencyWarnings = checkPersonConsistency(
+      {
+        id: person.id,
+        firstName: person.firstName,
+        lastName: person.lastName,
+        gender: person.gender,
+        birthDate: person.birthDate,
+        deathDate: person.deathDate,
+        fatherId: person.fatherId,
+        motherId: person.motherId,
+        father: person.father,
+        mother: person.mother,
+      },
+      unionsForConsistency,
+      childrenForConsistency
+    );
+
     return NextResponse.json({
       ...person,
       unions,
       children,
+      consistencyWarnings,
     });
   } catch (error: any) {
     console.error("Erreur lors de la récupération de la personne:", error);

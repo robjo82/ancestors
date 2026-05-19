@@ -42,10 +42,10 @@ COPY --from=builder /app/prisma ./prisma
 COPY --from=builder /app/prisma.config.ts ./
 COPY --from=builder /app/tsconfig.json ./
 
-# Récupérer Prisma CLI de manière à pouvoir exécuter "npx prisma migrate deploy" au démarrage
+# Récupérer Prisma CLI de manière à pouvoir exécuter les migrations au démarrage
 COPY --from=builder /app/node_modules/prisma ./node_modules/prisma
 COPY --from=builder /app/node_modules/@prisma ./node_modules/@prisma
 COPY --from=builder /app/node_modules/.prisma ./node_modules/.prisma
 
 # Lancer les migrations Prisma au démarrage pour initialiser la base SQLite, puis démarrer le serveur standalone
-CMD npx prisma migrate deploy && node server.js
+CMD node node_modules/prisma/build/index.js migrate deploy && node server.js

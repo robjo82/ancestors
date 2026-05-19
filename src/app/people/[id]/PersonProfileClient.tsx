@@ -2,6 +2,9 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
+import { parseDate } from "../../../utils/dateParser";
+import { checkPersonConsistency } from "../../../utils/consistency";
+import { computeSosaNumbering, computeAbovilleNumbering, computePelissierNumbering } from "../../../utils/numbering";
 
 interface Person {
   id: string;
@@ -60,6 +63,8 @@ interface PeopleOption {
   lastName: string;
   gender: string;
   birthDate: string | null;
+  fatherId?: string | null;
+  motherId?: string | null;
 }
 
 interface PersonProfileClientProps {
@@ -69,6 +74,7 @@ interface PersonProfileClientProps {
   allPeople: PeopleOption[];
   potentialFathers: PeopleOption[];
   potentialMothers: PeopleOption[];
+  consistencyWarnings?: any[];
 }
 
 export default function PersonProfileClient({
@@ -78,6 +84,7 @@ export default function PersonProfileClient({
   allPeople,
   potentialFathers,
   potentialMothers,
+  consistencyWarnings = [],
 }: PersonProfileClientProps) {
   const router = useRouter();
   
@@ -125,6 +132,76 @@ export default function PersonProfileClient({
   const [matchIdResults, setMatchIdResults] = useState<any[]>([]);
   const [searchingMatchId, setSearchingMatchId] = useState(false);
   const [searchError, setSearchError] = useState("");
+
+  // État d'édition d'état civil complet
+  const [isEditingCivic, setIsEditingCivic] = useState(false);
+  const [civicData, setCivicData] = useState({
+    firstName: person.firstName,
+    lastName: person.lastName,
+    birthName: person.birthName || "",
+    gender: person.gender,
+    occupation: person.occupation || "",
+    birthDate: person.birthDate || "",
+    birthPlace: person.birthPlace || "",
+    baptismDate: person.baptismDate || "",
+    baptismPlace: person.baptismPlace || "",
+    deathDate: person.deathDate || "",
+    deathPlace: person.deathPlace || "",
+    burialDate: person.burialDate || "",
+    burialPlace: person.burialPlace || "",
+  });
+  const [savingCivic, setSavingCivic] = useState(false);
+
+  // État des numérotations
+  const [deCujusId, setDeCujusId] = useState<string>("");
+  const [descendanceRootId, setDescendanceRootId] = useState<string>("");
+
+  useEffect(() => {
+    const savedDeCujus = localStorage.getItem("ancestors_sosa_de_cujus_id") || person.id;
+    const savedRoot = localStorage.getItem("ancestors_descendance_root_id") || person.id;
+    setDeCujusId(savedDeCujus);
+    setDescendanceRootId(savedRoot);
+  }, [person.id]);
+
+  const allPeopleWithSelf = [
+    ...allPeople,
+    {
+      id: person.id,
+      firstName: person.firstName,
+      lastName: person.lastName,
+      gender: person.gender,
+      birthDate: person.birthDate,
+      fatherId: person.fatherId,
+      motherId: person.motherId,
+    }
+  ];
+
+  const deCujusPerson = allPeopleWithSelf.find(p => p.id === deCujusId);
+  const rootPerson = allPeopleWithSelf.find(p => p.id === descendanceRootId);
+
+  const peopleMinimal = allPeopleWithSelf.map(p => ({
+    id: p.id,
+    fatherId: p.fatherId ?? null,
+    motherId: p.motherId ?? null,
+    birthDate: p.birthDate ?? null,
+  }));
+
+  // Calcul Sosa
+  let mySosaNumbers: number[] = [];
+  if (deCujusId) {
+    const sosaMap = computeSosaNumbering(peopleMinimal, deCujusId);
+    mySosaNumbers = sosaMap[person.id] || [];
+  }
+
+  // Calcul Aboville / Pélissier
+  let myAboville: string | null = null;
+  let myPelissier: string | null = null;
+  if (descendanceRootId) {
+    const abovilleMap = computeAbovilleNumbering(peopleMinimal, descendanceRootId);
+    const pelissierMap = computePelissierNumbering(peopleMinimal, descendanceRootId);
+    myAboville = abovilleMap[person.id] || null;
+    myPelissier = pelissierMap[person.id] || null;
+  }
 
   const birthYear = person.birthDate ? person.birthDate.match(/\d{4}/)?.[0] || "" : "";
 
@@ -180,6 +257,110 @@ export default function PersonProfileClient({
     } catch (e) {
       alert("Erreur de communication avec le serveur.");
     }
+  };
+
+  const handleCivicSave = async () => {
+    setSavingCivic(true);
+    try {
+      const response = await fetch(`/api/people/${person.id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(civicData),
+      });
+
+      if (response.ok) {
+        setIsEditingCivic(false);
+        router.refresh();
+      } else {
+        const d = await response.json();
+        alert(d.error || "Erreur lors de la modification de l'état civil.");
+      }
+    } catch (e) {
+      alert("Erreur réseau.");
+    } finally {
+      setSavingCivic(false);
+    }
+  };
+
+  const getMonthName = (m: number): string => {
+    const months = ["janvier", "février", "mars", "avril", "mai", "juin", "juillet", "août", "septembre", "octobre", "novembre", "décembre"];
+    return months[m - 1] || "";
+  };
+
+  const renderDateFeedback = (dateStr: string) => {
+    if (!dateStr) return null;
+    const parsed = parseDate(dateStr);
+    if (parsed.year) {
+      const monthStr = parsed.month ? ` ${getMonthName(parsed.month)}` : "";
+      const dayStr = parsed.day ? ` ${parsed.day}` : "";
+      const approxStr = parsed.isApproximate ? "vers " : parsed.isBefore ? "avant " : parsed.isAfter ? "après " : "";
+      return (
+        <span style={{ fontSize: "0.8rem", color: "var(--accent-emerald)", display: "flex", alignItems: "center", gap: "0.25rem", marginTop: "0.25rem" }}>
+          🟢 Reconnu : {approxStr}{dayStr}{monthStr} {parsed.year}
+        </span>
+      );
+    } else {
+      return (
+        <span style={{ fontSize: "0.8rem", color: "var(--text-muted)", display: "flex", alignItems: "center", gap: "0.25rem", marginTop: "0.25rem" }}>
+          ⚠️ Date non reconnue (texte brut simple)
+        </span>
+      );
+    }
+  };
+
+  const renderDraftConsistencyWarnings = () => {
+    const unionsForConsistency = unions.map((u: any) => ({
+      id: u.id,
+      weddingDate: u.weddingDate,
+      partnerId: u.partner?.id || "",
+      partnerName: u.partner ? `${u.partner.firstName} ${u.partner.lastName}` : "Conjoint inconnu"
+    }));
+
+    const childrenForConsistency = children.map((c: any) => ({
+      id: c.id,
+      firstName: c.firstName,
+      lastName: c.lastName,
+      birthDate: c.birthDate
+    }));
+
+    const draftWarnings = checkPersonConsistency(
+      {
+        id: person.id,
+        firstName: civicData.firstName,
+        lastName: civicData.lastName,
+        gender: civicData.gender,
+        birthDate: civicData.birthDate || null,
+        deathDate: civicData.deathDate || null,
+        fatherId: person.fatherId,
+        motherId: person.motherId,
+        father: person.father,
+        mother: person.mother,
+      },
+      unionsForConsistency,
+      childrenForConsistency
+    );
+
+    if (draftWarnings.length === 0) return null;
+
+    return (
+      <div style={{ 
+        padding: "0.75rem", 
+        border: "1px solid rgba(239, 68, 68, 0.2)", 
+        background: "rgba(239, 68, 68, 0.05)",
+        borderRadius: "8px",
+        display: "flex",
+        flexDirection: "column",
+        gap: "0.5rem",
+        marginTop: "0.5rem"
+      }}>
+        <strong style={{ fontSize: "0.85rem", color: "#f87171" }}>⚠️ Incohérences détectées (en temps réel) :</strong>
+        {draftWarnings.map((w, i) => (
+          <span key={i} style={{ fontSize: "0.8rem", color: "var(--text-secondary)" }}>
+            • {w.message}
+          </span>
+        ))}
+      </div>
+    );
   };
 
   const handleNotesSave = async () => {
@@ -493,6 +674,49 @@ export default function PersonProfileClient({
         
         {/* 1. Onglet Vue d'Ensemble (Overview) */}
         <div className={`tab-pane ${activeTab === "overview" ? "active" : ""}`}>
+          
+          {/* Panneau d'alertes de cohérence chronologique */}
+          {consistencyWarnings && consistencyWarnings.length > 0 && (
+            <div className="glass" style={{ 
+              padding: "1.5rem", 
+              marginBottom: "2rem", 
+              border: "1px solid rgba(239, 68, 68, 0.25)", 
+              background: "linear-gradient(135deg, rgba(239, 68, 68, 0.08), rgba(239, 68, 68, 0.02))",
+              borderRadius: "16px",
+              boxShadow: "0 8px 32px rgba(239, 68, 68, 0.05)",
+            }}>
+              <h3 className="title-font" style={{ fontSize: "1.25rem", color: "#f87171", display: "flex", alignItems: "center", gap: "0.5rem", marginBottom: "1rem" }}>
+                <span className="pulsate" style={{ fontSize: "1.4rem" }}>⚠️</span> Anomalies Chronologiques Détectées ({consistencyWarnings.length})
+              </h3>
+              <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
+                {consistencyWarnings.map((warning: any, idx: number) => (
+                  <div key={idx} style={{ 
+                    display: "flex", 
+                    alignItems: "center", 
+                    justifyContent: "space-between", 
+                    padding: "0.75rem 1rem", 
+                    background: "rgba(15, 25, 18, 0.4)", 
+                    borderRadius: "8px", 
+                    borderLeft: warning.severity === "error" ? "4px solid #ef4444" : "4px solid #fbbf24",
+                  }}>
+                    <span style={{ fontSize: "0.95rem", color: "var(--text-primary)" }}>{warning.message}</span>
+                    <span style={{ 
+                      fontSize: "0.75rem", 
+                      fontWeight: 700, 
+                      padding: "0.2rem 0.5rem", 
+                      borderRadius: "4px", 
+                      textTransform: "uppercase",
+                      background: warning.severity === "error" ? "rgba(239, 68, 68, 0.2)" : "rgba(251, 191, 36, 0.2)",
+                      color: warning.severity === "error" ? "#f87171" : "#fbbf24",
+                    }}>
+                      {warning.severity === "error" ? "Erreur" : "Alerte"}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
           <div style={{ display: "grid", gridTemplateColumns: "1.5fr 1fr", gap: "2rem" }} className="overview-layout">
             
             <div style={{ display: "flex", flexDirection: "column", gap: "2rem" }}>
@@ -570,18 +794,221 @@ export default function PersonProfileClient({
               </div>
             </div>
 
-            {/* Fiche d'état civil rapide */}
-            <div className="card glass civic-card" style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
-              <h3 className="title-font" style={{ fontSize: "1.3rem", color: "var(--accent-gold)" }}>
-                📁 État Civil Renseigné
-              </h3>
+            {/* Colonne de droite */}
+            <div style={{ display: "flex", flexDirection: "column", gap: "2rem" }}>
               
-              <ul style={{ listStyle: "none", display: "flex", flexDirection: "column", gap: "0.75rem", fontSize: "0.95rem" }}>
-                <li>👶 **Naissance :** {person.birthDate || "Inconnue"} {person.birthPlace ? `à ${person.birthPlace}` : ""}</li>
-                {person.baptismDate && <li>👼 **Baptême :** {person.baptismDate} {person.baptismPlace ? `à ${person.baptismPlace}` : ""}</li>}
-                <li>💀 **Décès :** {person.deathDate || "Vivant (ou inconnu)"} {person.deathPlace ? `à ${person.deathPlace}` : ""}</li>
-                {person.burialDate && <li>⚰️ **Inhumation :** {person.burialDate} {person.burialPlace ? `à ${person.burialPlace}` : ""}</li>}
-              </ul>
+              {/* Fiche d'état civil rapide */}
+              <div className="card glass civic-card" style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                  <h3 className="title-font" style={{ fontSize: "1.3rem", color: "var(--accent-gold)" }}>
+                    📁 État Civil Renseigné
+                  </h3>
+                  {!isEditingCivic ? (
+                    <button onClick={() => setIsEditingCivic(true)} className="btn btn-secondary no-print" style={{ padding: "0.4rem 0.8rem", fontSize: "0.85rem" }}>
+                      Modifier
+                    </button>
+                  ) : (
+                    <div style={{ display: "flex", gap: "0.5rem" }} className="no-print">
+                      <button onClick={handleCivicSave} className="btn btn-primary" style={{ padding: "0.4rem 0.8rem", fontSize: "0.85rem" }} disabled={savingCivic}>
+                        {savingCivic ? "Sauvegarde..." : "Enregistrer"}
+                      </button>
+                      <button onClick={() => { setIsEditingCivic(false); setCivicData({
+                        firstName: person.firstName,
+                        lastName: person.lastName,
+                        birthName: person.birthName || "",
+                        gender: person.gender,
+                        occupation: person.occupation || "",
+                        birthDate: person.birthDate || "",
+                        birthPlace: person.birthPlace || "",
+                        baptismDate: person.baptismDate || "",
+                        baptismPlace: person.baptismPlace || "",
+                        deathDate: person.deathDate || "",
+                        deathPlace: person.deathPlace || "",
+                        burialDate: person.burialDate || "",
+                        burialPlace: person.burialPlace || "",
+                      }); }} className="btn btn-secondary" style={{ padding: "0.4rem 0.8rem", fontSize: "0.85rem" }}>
+                        Annuler
+                      </button>
+                    </div>
+                  )}
+                </div>
+                
+                {!isEditingCivic ? (
+                  <ul style={{ listStyle: "none", display: "flex", flexDirection: "column", gap: "0.75rem", fontSize: "0.95rem" }}>
+                    <li>👶 **Naissance :** {person.birthDate || "Inconnue"} {person.birthPlace ? `à ${person.birthPlace}` : ""}</li>
+                    {person.baptismDate && <li>👼 **Baptême :** {person.baptismDate} {person.baptismPlace ? `à ${person.baptismPlace}` : ""}</li>}
+                    <li>💀 **Décès :** {person.deathDate || "Vivant (ou inconnu)"} {person.deathPlace ? `à ${person.deathPlace}` : ""}</li>
+                    {person.burialDate && <li>⚰️ **Inhumation :** {person.burialDate} {person.burialPlace ? `à ${person.burialPlace}` : ""}</li>}
+                  </ul>
+                ) : (
+                  <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }} className="no-print">
+                    <div className="input-group">
+                      <label className="input-label">Prénom</label>
+                      <input type="text" className="input-field" value={civicData.firstName} onChange={e => setCivicData({...civicData, firstName: e.target.value})} />
+                    </div>
+                    <div className="input-group">
+                      <label className="input-label">Nom</label>
+                      <input type="text" className="input-field" value={civicData.lastName} onChange={e => setCivicData({...civicData, lastName: e.target.value})} />
+                    </div>
+                    <div className="input-group">
+                      <label className="input-label">Nom de naissance</label>
+                      <input type="text" className="input-field" value={civicData.birthName} onChange={e => setCivicData({...civicData, birthName: e.target.value})} />
+                    </div>
+                    <div className="input-group">
+                      <label className="input-label">Sexe</label>
+                      <select className="input-field" value={civicData.gender} onChange={e => setCivicData({...civicData, gender: e.target.value})}>
+                        <option value="M">Homme ♂</option>
+                        <option value="F">Femme ♀</option>
+                        <option value="U">Inconnu ❓</option>
+                      </select>
+                    </div>
+                    <div className="input-group">
+                      <label className="input-label">Profession</label>
+                      <input type="text" className="input-field" value={civicData.occupation} onChange={e => setCivicData({...civicData, occupation: e.target.value})} />
+                    </div>
+
+                    <hr style={{ border: "none", borderTop: "1px solid var(--border-subtle)", margin: "0.5rem 0" }} />
+
+                    <div className="input-group">
+                      <label className="input-label">Date de Naissance</label>
+                      <input type="text" className="input-field" value={civicData.birthDate} onChange={e => setCivicData({...civicData, birthDate: e.target.value})} placeholder="ex: vers 1750, 15 mai 1812" />
+                      {renderDateFeedback(civicData.birthDate)}
+                    </div>
+                    <div className="input-group">
+                      <label className="input-label">Lieu de Naissance</label>
+                      <input type="text" className="input-field" value={civicData.birthPlace} onChange={e => setCivicData({...civicData, birthPlace: e.target.value})} />
+                    </div>
+
+                    <div className="input-group">
+                      <label className="input-label">Date de Baptême</label>
+                      <input type="text" className="input-field" value={civicData.baptismDate} onChange={e => setCivicData({...civicData, baptismDate: e.target.value})} placeholder="ex: 16 mai 1812" />
+                      {renderDateFeedback(civicData.baptismDate)}
+                    </div>
+                    <div className="input-group">
+                      <label className="input-label">Lieu de Baptême</label>
+                      <input type="text" className="input-field" value={civicData.baptismPlace} onChange={e => setCivicData({...civicData, baptismPlace: e.target.value})} />
+                    </div>
+
+                    <div className="input-group">
+                      <label className="input-label">Date de Décès</label>
+                      <input type="text" className="input-field" value={civicData.deathDate} onChange={e => setCivicData({...civicData, deathDate: e.target.value})} placeholder="ex: après 1890, 20 oct 1888" />
+                      {renderDateFeedback(civicData.deathDate)}
+                    </div>
+                    <div className="input-group">
+                      <label className="input-label">Lieu de Décès</label>
+                      <input type="text" className="input-field" value={civicData.deathPlace} onChange={e => setCivicData({...civicData, deathPlace: e.target.value})} />
+                    </div>
+
+                    <div className="input-group">
+                      <label className="input-label">Date d'Inhumation</label>
+                      <input type="text" className="input-field" value={civicData.burialDate} onChange={e => setCivicData({...civicData, burialDate: e.target.value})} />
+                      {renderDateFeedback(civicData.burialDate)}
+                    </div>
+                    <div className="input-group">
+                      <label className="input-label">Lieu d'Inhumation</label>
+                      <input type="text" className="input-field" value={civicData.burialPlace} onChange={e => setCivicData({...civicData, burialPlace: e.target.value})} />
+                    </div>
+
+                    {renderDraftConsistencyWarnings()}
+                  </div>
+                )}
+              </div>
+
+              {/* Numérotation Généalogique */}
+              <div className="card glass" style={{ display: "flex", flexDirection: "column", gap: "1.25rem" }}>
+                <h3 className="title-font" style={{ fontSize: "1.3rem", color: "var(--accent-gold)" }}>
+                  🌿 Numérotations Généalogiques
+                </h3>
+
+                <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
+                  {/* Sosa */}
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0.75rem", background: "var(--bg-tertiary)", borderRadius: "8px", border: "1px solid var(--border-subtle)" }}>
+                    <div style={{ display: "flex", flexDirection: "column" }}>
+                      <span style={{ fontSize: "0.75rem", color: "var(--text-muted)", fontWeight: 600 }}>SOSA-STRADONITZ</span>
+                      <span style={{ fontSize: "0.85rem", color: "var(--text-secondary)", marginTop: "0.1rem" }}>
+                        De Cujus: <span style={{ color: "var(--text-primary)" }}>{deCujusPerson ? `${deCujusPerson.firstName} ${deCujusPerson.lastName}` : "Lui-même"}</span>
+                      </span>
+                    </div>
+                    <span style={{ 
+                      fontSize: "0.95rem", 
+                      fontWeight: 800, 
+                      padding: "0.3rem 0.6rem", 
+                      borderRadius: "6px", 
+                      background: mySosaNumbers.length > 0 ? "var(--accent-gold-glow)" : "rgba(255, 255, 255, 0.05)",
+                      color: mySosaNumbers.length > 0 ? "var(--accent-gold)" : "var(--text-muted)",
+                      border: mySosaNumbers.length > 0 ? "1px solid var(--accent-gold)" : "1px solid var(--border-subtle)"
+                    }}>
+                      {mySosaNumbers.length > 0 ? `N° ${mySosaNumbers.join(", ")}` : "Non défini"}
+                    </span>
+                  </div>
+
+                  {/* Aboville */}
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0.75rem", background: "var(--bg-tertiary)", borderRadius: "8px", border: "1px solid var(--border-subtle)" }}>
+                    <div style={{ display: "flex", flexDirection: "column" }}>
+                      <span style={{ fontSize: "0.75rem", color: "var(--text-muted)", fontWeight: 600 }}>ABOVILLE (DESCENDANCE)</span>
+                      <span style={{ fontSize: "0.85rem", color: "var(--text-secondary)", marginTop: "0.1rem" }}>
+                        Racine: <span style={{ color: "var(--text-primary)" }}>{rootPerson ? `${rootPerson.firstName} ${rootPerson.lastName}` : "Lui-même"}</span>
+                      </span>
+                    </div>
+                    <span style={{ 
+                      fontSize: "0.95rem", 
+                      fontWeight: 800, 
+                      padding: "0.3rem 0.6rem", 
+                      borderRadius: "6px", 
+                      background: myAboville ? "var(--accent-emerald-glow)" : "rgba(255, 255, 255, 0.05)",
+                      color: myAboville ? "var(--accent-emerald)" : "var(--text-muted)",
+                      border: myAboville ? "1px solid var(--accent-emerald)" : "1px solid var(--border-subtle)"
+                    }}>
+                      {myAboville ? `N° ${myAboville}` : "Non défini"}
+                    </span>
+                  </div>
+
+                  {/* Pélissier */}
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0.75rem", background: "var(--bg-tertiary)", borderRadius: "8px", border: "1px solid var(--border-subtle)" }}>
+                    <div style={{ display: "flex", flexDirection: "column" }}>
+                      <span style={{ fontSize: "0.75rem", color: "var(--text-muted)", fontWeight: 600 }}>PÉLISSIER (DESCENDANCE)</span>
+                      <span style={{ fontSize: "0.85rem", color: "var(--text-secondary)", marginTop: "0.1rem" }}>
+                        Racine: <span style={{ color: "var(--text-primary)" }}>{rootPerson ? `${rootPerson.firstName} ${rootPerson.lastName}` : "Lui-même"}</span>
+                      </span>
+                    </div>
+                    <span style={{ 
+                      fontSize: "0.95rem", 
+                      fontWeight: 800, 
+                      padding: "0.3rem 0.6rem", 
+                      borderRadius: "6px", 
+                      background: myPelissier ? "var(--accent-emerald-glow)" : "rgba(255, 255, 255, 0.05)",
+                      color: myPelissier ? "var(--accent-emerald)" : "var(--text-muted)",
+                      border: myPelissier ? "1px solid var(--accent-emerald)" : "1px solid var(--border-subtle)"
+                    }}>
+                      {myPelissier ? `N° ${myPelissier}` : "Non défini"}
+                    </span>
+                  </div>
+                </div>
+
+                <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
+                  <button 
+                    onClick={() => {
+                      localStorage.setItem("ancestors_sosa_de_cujus_id", person.id);
+                      setDeCujusId(person.id);
+                    }}
+                    className="btn btn-secondary"
+                    style={{ flex: 1, padding: "0.5rem", fontSize: "0.8rem", textAlign: "center" }}
+                  >
+                    🎯 Définir Sosa 1
+                  </button>
+                  <button 
+                    onClick={() => {
+                      localStorage.setItem("ancestors_descendance_root_id", person.id);
+                      setDescendanceRootId(person.id);
+                    }}
+                    className="btn btn-secondary"
+                    style={{ flex: 1, padding: "0.5rem", fontSize: "0.8rem", textAlign: "center" }}
+                  >
+                    🌱 Définir Racine
+                  </button>
+                </div>
+              </div>
+
             </div>
 
           </div>
