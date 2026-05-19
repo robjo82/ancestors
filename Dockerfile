@@ -18,10 +18,12 @@ COPY . .
 ENV NEXT_TELEMETRY_DISABLED=1
 RUN npm run build
 
-# Prégénérer et élaguer les dépendances pour ne garder que la production (et Prisma CLI qui y a été déplacé)
-RUN npm prune --omit=dev
+# Etape 2 : Installation minimale de Prisma CLI avec toutes ses dépendances transitives
+FROM node:24-alpine AS prisma-installer
+WORKDIR /prisma-cli
+RUN npm init -y && npm install prisma@7.8.0 --no-audit --no-fund --omit=dev
 
-# Etape 2 : Runner de production léger
+# Etape 3 : Runner de production léger
 FROM node:24-alpine AS runner
 WORKDIR /app
 
@@ -45,8 +47,8 @@ COPY --from=builder /app/prisma ./prisma
 COPY --from=builder /app/prisma.config.ts ./
 COPY --from=builder /app/tsconfig.json ./
 
-# Récupérer l'intégralité des dépendances de production (y compris Prisma CLI et ses dépendances transitives)
-COPY --from=builder /app/node_modules ./node_modules
+# Récupérer Prisma CLI avec toutes ses dépendances transitives depuis le stage isolé
+COPY --from=prisma-installer /prisma-cli/node_modules ./node_modules
 
 # Lancer les migrations Prisma au démarrage pour initialiser la base SQLite, puis démarrer le serveur standalone
 CMD ["/bin/sh", "-c", "node node_modules/prisma/build/index.js migrate deploy && node server.js"]
