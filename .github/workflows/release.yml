@@ -46,3 +46,21 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: npx semantic-release --debug
+
+      - name: Build and Push Docker Image
+        run: |
+          git fetch --tags
+          VERSION=$(git describe --tags --abbrev=0 2>/dev/null || echo "v0.0.0")
+          VERSION_NO_V=${VERSION#v}
+          echo "Version found: $VERSION ($VERSION_NO_V)"
+          
+          echo "Logging in to Docker Registry..."
+          docker login registry.robin-joseph.fr -u dummy -p dummy
+          
+          echo "Building Docker Image..."
+          docker build -t registry.robin-joseph.fr/ancestors:latest -t registry.robin-joseph.fr/ancestors:$VERSION -t registry.robin-joseph.fr/ancestors:$VERSION_NO_V .
+          
+          echo "Pushing Docker Images..."
+          docker push registry.robin-joseph.fr/ancestors:latest
+          docker push registry.robin-joseph.fr/ancestors:$VERSION
+          docker push registry.robin-joseph.fr/ancestors:$VERSION_NO_V
