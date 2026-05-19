@@ -25,6 +25,7 @@ export default async function NewPersonPage() {
       firstName: true,
       lastName: true,
       birthDate: true,
+      deathDate: true,
     },
   });
 
@@ -39,6 +40,7 @@ export default async function NewPersonPage() {
       firstName: true,
       lastName: true,
       birthDate: true,
+      deathDate: true,
     },
   });
 
