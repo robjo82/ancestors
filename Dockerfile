@@ -1,41 +1,51 @@
-# Etape 1 : Build
+# Etape 1 : Dépendances et compilation
 FROM node:24-alpine AS builder
+RUN apk add --no-cache libc6-compat
 WORKDIR /app
 
-# Installer les dépendances
+# Installer les dépendances (y compris les devDependencies nécessaires pour la compilation)
 COPY package*.json ./
-RUN npm ci
+RUN npm install --no-audit --no-fund
 
 # Copier le schéma et générer le Client Prisma
 COPY prisma ./prisma/
 RUN npx prisma generate
 
-# Copier le reste du projet et compiler Next.js
+# Copier le reste du code de l'application
 COPY . .
-# Désactiver le check eslint durant le build docker pour éviter les faux-positifs
+
+# Désactiver le check eslint et le telemetry durant le build docker
 ENV NEXT_TELEMETRY_DISABLED=1
 RUN npm run build
 
-# Etape 2 : Runner
+# Etape 2 : Runner de production léger
 FROM node:24-alpine AS runner
 WORKDIR /app
 
 ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
 
-# Récupérer les fichiers nécessaires
-COPY --from=builder /app/package*.json ./
-COPY --from=builder /app/node_modules ./node_modules
-COPY --from=builder /app/.next ./.next
-COPY --from=builder /app/public ./public
-COPY --from=builder /app/prisma ./prisma
-COPY --from=builder /app/prisma.config.ts ./
-COPY --from=builder /app/tsconfig.json ./
-
 # Exposer le port par défaut
 EXPOSE 3000
 ENV PORT=3000
 ENV HOSTNAME="0.0.0.0"
 
-# Lancer les migrations Prisma au démarrage pour initialiser la base SQLite persistante, puis démarrer le serveur
-CMD npx prisma migrate deploy && npm run start
+# Récupérer les assets publics
+COPY --from=builder /app/public ./public
+
+# Récupérer le bundle Next.js standalone compilé (très léger, sous les 50MB)
+COPY --from=builder /app/.next/standalone ./
+COPY --from=builder /app/.next/static ./.next/static
+
+# Récupérer Prisma et ses fichiers de migration pour pouvoir exécuter les migrations en production
+COPY --from=builder /app/prisma ./prisma
+COPY --from=builder /app/prisma.config.ts ./
+COPY --from=builder /app/tsconfig.json ./
+
+# Récupérer Prisma CLI de manière à pouvoir exécuter "npx prisma migrate deploy" au démarrage
+COPY --from=builder /app/node_modules/prisma ./node_modules/prisma
+COPY --from=builder /app/node_modules/@prisma ./node_modules/@prisma
+COPY --from=builder /app/node_modules/.prisma ./node_modules/.prisma
+
+# Lancer les migrations Prisma au démarrage pour initialiser la base SQLite, puis démarrer le serveur standalone
+CMD npx prisma migrate deploy && node server.js
