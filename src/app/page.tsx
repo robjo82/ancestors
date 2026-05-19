@@ -1,11 +1,14 @@
 import { prisma } from "../lib/db";
+import { getCurrentUser, getActiveTreeIdForUser } from "../lib/auth";
+import { redirect } from "next/navigation";
 
 export const dynamic = "force-dynamic";
 
 // Calcul de la profondeur maximale de l'arbre (nombre de générations)
-async function getGenerationDepth(): Promise<number> {
+async function getGenerationDepth(treeId: string): Promise<number> {
   try {
     const people = await prisma.person.findMany({
+      where: { treeId },
       select: { id: true, fatherId: true, motherId: true }
     });
     
@@ -37,17 +40,25 @@ async function getGenerationDepth(): Promise<number> {
 }
 
 export default async function Home() {
+  const user = await getCurrentUser();
+  if (!user) {
+    redirect("/login");
+  }
+
+  const activeTreeId = await getActiveTreeIdForUser(user.id);
+
   // Récupérer les statistiques directement depuis SQLite en une seule passe
-  const peopleCount = await prisma.person.count();
-  const unionsCount = await prisma.union.count();
-  const menCount = await prisma.person.count({ where: { gender: "M" } });
-  const womenCount = await prisma.person.count({ where: { gender: "F" } });
+  const peopleCount = await prisma.person.count({ where: { treeId: activeTreeId } });
+  const unionsCount = await prisma.union.count({ where: { treeId: activeTreeId } });
+  const menCount = await prisma.person.count({ where: { gender: "M", treeId: activeTreeId } });
+  const womenCount = await prisma.person.count({ where: { gender: "F", treeId: activeTreeId } });
   const otherCount = peopleCount - menCount - womenCount;
   
-  const maxGenerations = await getGenerationDepth();
+  const maxGenerations = await getGenerationDepth(activeTreeId);
   
   // Derniers profils modifiés
   const latestProfiles = await prisma.person.findMany({
+    where: { treeId: activeTreeId },
     take: 5,
     orderBy: { updatedAt: "desc" },
   });

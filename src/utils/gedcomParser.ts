@@ -67,7 +67,7 @@ function parseGedcomName(fullName: string): [string, string] {
 /**
  * Parse le contenu brut d'un fichier GEDCOM et l'enregistre en base de données.
  */
-export async function parseGedcom(fileContent: string): Promise<{
+export async function parseGedcom(fileContent: string, treeId: string): Promise<{
   peopleCount: number;
   unionsCount: number;
 }> {
@@ -239,9 +239,9 @@ export async function parseGedcom(fileContent: string): Promise<{
   // on vide d'abord la base (ou on gère un import propre sans doublons).
   // Pour ce projet, on va nettoyer la base de données existante pour avoir un import propre.
   await prisma.$transaction([
-    prisma.media.deleteMany(),
-    prisma.union.deleteMany(),
-    prisma.person.deleteMany(),
+    prisma.media.deleteMany({ where: { treeId } }),
+    prisma.union.deleteMany({ where: { treeId } }),
+    prisma.person.deleteMany({ where: { treeId } }),
   ]);
   
   // Map pour faire correspondre les ID GEDCOM (ex: I1) avec les UUID de notre base de données
@@ -252,6 +252,7 @@ export async function parseGedcom(fileContent: string): Promise<{
   for (const [gedcomId, indi] of indis.entries()) {
     const person = await prisma.person.create({
       data: {
+        treeId,
         firstName: indi.firstName,
         lastName: indi.lastName,
         birthName: indi.birthName || null,
@@ -299,6 +300,7 @@ export async function parseGedcom(fileContent: string): Promise<{
     if (partner1DbId && partner2DbId) {
       await prisma.union.create({
         data: {
+          treeId,
           partner1Id: partner1DbId,
           partner2Id: partner2DbId,
           type: fam.weddingDate || fam.weddingPlace ? "MARRIAGE" : "PARTNERSHIP",

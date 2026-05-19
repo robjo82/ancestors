@@ -1,17 +1,28 @@
 import { prisma } from "../../lib/db";
+import { getCurrentUser, getActiveTreeIdForUser } from "../../lib/auth";
+import { redirect } from "next/navigation";
 
 export default async function PeopleDirectoryPage({
   searchParams,
 }: {
   searchParams: Promise<{ q?: string; gender?: string; century?: string }>;
 }) {
+  const user = await getCurrentUser();
+  if (!user) {
+    redirect("/login");
+  }
+
+  const activeTreeId = await getActiveTreeIdForUser(user.id);
+
   const params = await searchParams;
   const q = params.q || "";
   const gender = params.gender || "";
   const century = params.century || "";
 
   // 1. Construire les conditions de filtre pour Prisma
-  const whereClause: any = {};
+  const whereClause: any = {
+    treeId: activeTreeId,
+  };
 
   // Filtre par recherche texte libre
   if (q) {

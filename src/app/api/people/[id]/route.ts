@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "../../../../lib/db";
+import { getCurrentUser, getActiveTreeIdForUser } from "../../../../lib/auth";
 
 // GET /api/people/[id] - Récupère les détails d'un individu avec toutes ses relations
 export async function GET(
@@ -7,10 +8,16 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const user = await getCurrentUser();
+    if (!user) {
+      return NextResponse.json({ error: "Non autorisé." }, { status: 401 });
+    }
+
+    const activeTreeId = await getActiveTreeIdForUser(user.id);
     const { id } = await params;
     
-    const person = await prisma.person.findUnique({
-      where: { id },
+    const person = await prisma.person.findFirst({
+      where: { id, treeId: activeTreeId },
       include: {
         father: true,
         mother: true,
@@ -40,6 +47,7 @@ export async function GET(
     // Récupérer les enfants (où la personne est le père ou la mère)
     const children = await prisma.person.findMany({
       where: {
+        treeId: activeTreeId,
         OR: [
           { fatherId: id },
           { motherId: id },
@@ -94,9 +102,23 @@ export async function PUT(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const user = await getCurrentUser();
+    if (!user) {
+      return NextResponse.json({ error: "Non autorisé." }, { status: 401 });
+    }
+
+    const activeTreeId = await getActiveTreeIdForUser(user.id);
     const { id } = await params;
-    const body = await request.json();
     
+    // Verify first that this person exists and belongs to the activeTreeId
+    const existing = await prisma.person.findFirst({
+      where: { id, treeId: activeTreeId }
+    });
+    if (!existing) {
+      return NextResponse.json({ error: "Individu introuvable." }, { status: 404 });
+    }
+
+    const body = await request.json();
     const {
       firstName,
       lastName,
@@ -166,7 +188,21 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const user = await getCurrentUser();
+    if (!user) {
+      return NextResponse.json({ error: "Non autorisé." }, { status: 401 });
+    }
+
+    const activeTreeId = await getActiveTreeIdForUser(user.id);
     const { id } = await params;
+    
+    // Verify first that this person exists and belongs to the activeTreeId
+    const existing = await prisma.person.findFirst({
+      where: { id, treeId: activeTreeId }
+    });
+    if (!existing) {
+      return NextResponse.json({ error: "Individu introuvable." }, { status: 404 });
+    }
     
     // Supprimer la personne (Prisma gérera la suppression en cascade sur les unions et médias si configuré)
     await prisma.person.delete({
@@ -182,3 +218,4 @@ export async function DELETE(
     );
   }
 }
+

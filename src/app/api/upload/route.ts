@@ -2,10 +2,17 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "../../../lib/db";
 import { writeFile, mkdir } from "fs/promises";
 import { join } from "path";
+import { getCurrentUser, getActiveTreeIdForUser } from "../../../lib/auth";
 
 // POST /api/upload - Téléverse un média (photo ou document) pour un individu
 export async function POST(request: NextRequest) {
   try {
+    const user = await getCurrentUser();
+    if (!user) {
+      return NextResponse.json({ error: "Non autorisé." }, { status: 401 });
+    }
+
+    const activeTreeId = await getActiveTreeIdForUser(user.id);
     const formData = await request.formData();
     const file = formData.get("file") as File;
     const personId = formData.get("personId") as string;
@@ -22,14 +29,14 @@ export async function POST(request: NextRequest) {
       );
     }
     
-    // Vérifier que la personne existe
-    const person = await prisma.person.findUnique({
-      where: { id: personId },
+    // Vérifier que la personne existe et appartient à l'arbre actif de l'utilisateur
+    const person = await prisma.person.findFirst({
+      where: { id: personId, treeId: activeTreeId },
     });
     
     if (!person) {
       return NextResponse.json(
-        { error: "L'individu associé est introuvable." },
+        { error: "L'individu associé est introuvable dans votre arbre actif." },
         { status: 404 }
       );
     }
@@ -54,6 +61,7 @@ export async function POST(request: NextRequest) {
     // Enregistrer le média en base de données
     const media = await prisma.media.create({
       data: {
+        treeId: activeTreeId,
         personId,
         url: relativeUrl,
         title,
@@ -82,3 +90,4 @@ export async function POST(request: NextRequest) {
     );
   }
 }
+

@@ -1,11 +1,18 @@
 import { NextRequest, NextResponse } from "next/server";
 import { parseGedcom } from "../../../utils/gedcomParser";
 import { exportGedcom } from "../../../utils/gedcomExporter";
+import { getCurrentUser, getActiveTreeIdForUser } from "../../../lib/auth";
 
 // GET /api/gedcom - Exporte les données SQLite au format GEDCOM
 export async function GET() {
   try {
-    const gedcomContent = await exportGedcom();
+    const user = await getCurrentUser();
+    if (!user) {
+      return NextResponse.json({ error: "Non autorisé." }, { status: 401 });
+    }
+
+    const activeTreeId = await getActiveTreeIdForUser(user.id);
+    const gedcomContent = await exportGedcom(activeTreeId);
     
     // Définir les headers pour un téléchargement propre
     return new NextResponse(gedcomContent, {
@@ -26,6 +33,12 @@ export async function GET() {
 // POST /api/gedcom - Importe un fichier GEDCOM
 export async function POST(request: NextRequest) {
   try {
+    const user = await getCurrentUser();
+    if (!user) {
+      return NextResponse.json({ error: "Non autorisé." }, { status: 401 });
+    }
+
+    const activeTreeId = await getActiveTreeIdForUser(user.id);
     const formData = await request.formData();
     const file = formData.get("file") as File;
     
@@ -40,7 +53,7 @@ export async function POST(request: NextRequest) {
     const fileContent = await file.text();
     
     // Parser et importer
-    const result = await parseGedcom(fileContent);
+    const result = await parseGedcom(fileContent, activeTreeId);
     
     return NextResponse.json({
       success: true,
@@ -56,3 +69,4 @@ export async function POST(request: NextRequest) {
     );
   }
 }
+

@@ -1,7 +1,7 @@
 /* Design System pour l'application "Ancestors" */
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@400;500;600;700;800&display=swap');
 
-:root {
+:root, [data-theme="dark"] {
   /* Palette de couleurs Premium HSL (Thème Sombre par défaut) */
   --bg-primary: hsl(140, 20%, 6%);
   --bg-secondary: hsl(140, 18%, 10%);
@@ -30,29 +30,26 @@
   --transition-fast: all 0.15s ease;
 }
 
-/* Thème Clair optionnel si l'utilisateur change ou si le système est en mode clair */
-@media (prefers-color-scheme: light) {
-  :root {
-    --bg-primary: hsl(40, 15%, 97%);
-    --bg-secondary: hsl(40, 12%, 94%);
-    --bg-tertiary: hsl(40, 10%, 90%);
-    
-    --border-subtle: rgba(0, 0, 0, 0.08);
-    --border-focus: hsla(145, 63%, 30%, 0.4);
-    
-    --accent-emerald: hsl(145, 63%, 32%);
-    --accent-emerald-glow: hsla(145, 63%, 32%, 0.1);
-    --accent-gold: hsl(40, 75%, 45%);
-    --accent-gold-glow: hsla(40, 75%, 45%, 0.1);
-    
-    --text-primary: hsl(140, 25%, 12%);
-    --text-secondary: hsl(140, 15%, 30%);
-    --text-muted: hsl(140, 10%, 50%);
-    
-    --glass-bg: rgba(255, 255, 255, 0.7);
-    --glass-border: rgba(0, 0, 0, 0.08);
-    --glass-shadow: rgba(0, 0, 0, 0.08);
-  }
+[data-theme="light"] {
+  --bg-primary: hsl(40, 15%, 97%);
+  --bg-secondary: hsl(40, 12%, 94%);
+  --bg-tertiary: hsl(40, 10%, 90%);
+  
+  --border-subtle: rgba(0, 0, 0, 0.08);
+  --border-focus: hsla(145, 63%, 30%, 0.4);
+  
+  --accent-emerald: hsl(145, 63%, 32%);
+  --accent-emerald-glow: hsla(145, 63%, 32%, 0.1);
+  --accent-gold: hsl(40, 75%, 45%);
+  --accent-gold-glow: hsla(40, 75%, 45%, 0.1);
+  
+  --text-primary: hsl(140, 25%, 12%);
+  --text-secondary: hsl(140, 15%, 30%);
+  --text-muted: hsl(140, 10%, 50%);
+  
+  --glass-bg: rgba(255, 255, 255, 0.7);
+  --glass-border: rgba(0, 0, 0, 0.08);
+  --glass-shadow: rgba(0, 0, 0, 0.08);
 }
 
 /* Reset de base */

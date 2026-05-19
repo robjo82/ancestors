@@ -38,15 +38,18 @@ function formatGedcomDate(dateStr: string | null): string | null {
 /**
  * Exporte l'intégralité de la base SQLite au format texte GEDCOM 5.5.1.
  */
-export async function exportGedcom(): Promise<string> {
+export async function exportGedcom(treeId: string): Promise<string> {
   const people = await prisma.person.findMany({
+    where: { treeId },
     include: {
       unionsPartner1: true,
       unionsPartner2: true,
     },
   });
   
-  const unions = await prisma.union.findMany();
+  const unions = await prisma.union.findMany({
+    where: { treeId },
+  });
   
   const lines: string[] = [];
   

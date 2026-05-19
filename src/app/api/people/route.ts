@@ -1,9 +1,16 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "../../../lib/db";
+import { getCurrentUser, getActiveTreeIdForUser } from "../../../lib/auth";
 
 // GET /api/people - Liste les individus avec possibilité de recherche
 export async function GET(request: NextRequest) {
   try {
+    const user = await getCurrentUser();
+    if (!user) {
+      return NextResponse.json({ error: "Non autorisé." }, { status: 401 });
+    }
+
+    const activeTreeId = await getActiveTreeIdForUser(user.id);
     const { searchParams } = new URL(request.url);
     const query = searchParams.get("q") || "";
     
@@ -12,6 +19,7 @@ export async function GET(request: NextRequest) {
     if (query) {
       people = await prisma.person.findMany({
         where: {
+          treeId: activeTreeId,
           OR: [
             { firstName: { contains: query } },
             { lastName: { contains: query } },
@@ -27,6 +35,9 @@ export async function GET(request: NextRequest) {
       });
     } else {
       people = await prisma.person.findMany({
+        where: {
+          treeId: activeTreeId,
+        },
         orderBy: [
           { lastName: "asc" },
           { firstName: "asc" },
@@ -47,6 +58,12 @@ export async function GET(request: NextRequest) {
 // POST /api/people - Crée un nouvel individu
 export async function POST(request: NextRequest) {
   try {
+    const user = await getCurrentUser();
+    if (!user) {
+      return NextResponse.json({ error: "Non autorisé." }, { status: 401 });
+    }
+
+    const activeTreeId = await getActiveTreeIdForUser(user.id);
     const body = await request.json();
     const {
       firstName,
@@ -78,6 +95,7 @@ export async function POST(request: NextRequest) {
     
     const person = await prisma.person.create({
       data: {
+        treeId: activeTreeId,
         firstName,
         lastName,
         birthName: birthName || null,
@@ -108,3 +126,4 @@ export async function POST(request: NextRequest) {
     );
   }
 }
+

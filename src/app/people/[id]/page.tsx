@@ -1,17 +1,24 @@
 import { prisma } from "../../../lib/db";
 import PersonProfileClient from "./PersonProfileClient";
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
+import { getCurrentUser, getActiveTreeIdForUser } from "../../../lib/auth";
 
 export default async function PersonProfilePage({
   params,
 }: {
   params: Promise<{ id: string }>;
 }) {
+  const user = await getCurrentUser();
+  if (!user) {
+    redirect("/login");
+  }
+
+  const activeTreeId = await getActiveTreeIdForUser(user.id);
   const { id } = await params;
 
   // 1. Récupérer le profil complet de l'individu avec ses unions et médias
-  const person = await prisma.person.findUnique({
-    where: { id },
+  const person = await prisma.person.findFirst({
+    where: { id, treeId: activeTreeId },
     include: {
       father: true,
       mother: true,
@@ -38,6 +45,7 @@ export default async function PersonProfilePage({
   // Récupérer les enfants
   const children = await prisma.person.findMany({
     where: {
+      treeId: activeTreeId,
       OR: [
         { fatherId: id },
         { motherId: id },
@@ -75,6 +83,7 @@ export default async function PersonProfilePage({
   // Récupérer la liste complète des individus pour pouvoir associer de nouvelles unions ou parents
   const allPeople = await prisma.person.findMany({
     where: {
+      treeId: activeTreeId,
       NOT: { id }, // Exclure l'individu lui-même
     },
     orderBy: [

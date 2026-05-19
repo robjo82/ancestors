@@ -1,12 +1,21 @@
 import { prisma } from "../../../lib/db";
 import NewPersonClientForm from "./NewPersonClientForm";
+import { getCurrentUser, getActiveTreeIdForUser } from "../../../lib/auth";
+import { redirect } from "next/navigation";
 
 export const dynamic = "force-dynamic";
 
 export default async function NewPersonPage() {
+  const user = await getCurrentUser();
+  if (!user) {
+    redirect("/login");
+  }
+
+  const activeTreeId = await getActiveTreeIdForUser(user.id);
+
   // Récupérer la liste des pères et mères potentiels pour les menus déroulants
   const males = await prisma.person.findMany({
-    where: { gender: "M" },
+    where: { gender: "M", treeId: activeTreeId },
     orderBy: [
       { lastName: "asc" },
       { firstName: "asc" },
@@ -20,7 +29,7 @@ export default async function NewPersonPage() {
   });
 
   const females = await prisma.person.findMany({
-    where: { gender: "F" },
+    where: { gender: "F", treeId: activeTreeId },
     orderBy: [
       { lastName: "asc" },
       { firstName: "asc" },

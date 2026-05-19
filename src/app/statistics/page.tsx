@@ -1,4 +1,6 @@
 import { prisma } from "../../lib/db";
+import { getCurrentUser, getActiveTreeIdForUser } from "../../lib/auth";
+import { redirect } from "next/navigation";
 
 export const dynamic = "force-dynamic";
 
@@ -29,15 +31,23 @@ function extractYear(dateStr: string | null): number | null {
 }
 
 export default async function StatisticsPage() {
+  const user = await getCurrentUser();
+  if (!user) {
+    redirect("/login");
+  }
+
+  const activeTreeId = await getActiveTreeIdForUser(user.id);
+
   // 1. Fetch basic counts
-  const peopleCount = await prisma.person.count();
-  const unionsCount = await prisma.union.count();
-  const menCount = await prisma.person.count({ where: { gender: "M" } });
-  const womenCount = await prisma.person.count({ where: { gender: "F" } });
+  const peopleCount = await prisma.person.count({ where: { treeId: activeTreeId } });
+  const unionsCount = await prisma.union.count({ where: { treeId: activeTreeId } });
+  const menCount = await prisma.person.count({ where: { gender: "M", treeId: activeTreeId } });
+  const womenCount = await prisma.person.count({ where: { gender: "F", treeId: activeTreeId } });
   const unknownCount = peopleCount - menCount - womenCount;
 
   // Fetch all people with dates, places, and occupations to perform complete demographic parsing
   const people = await prisma.person.findMany({
+    where: { treeId: activeTreeId },
     select: {
       gender: true,
       birthDate: true,
