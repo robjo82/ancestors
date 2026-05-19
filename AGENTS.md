@@ -26,3 +26,7 @@ Every project in this workspace must strictly follow these structural and releas
    - The workflow must check out the repo, install clean production dependencies, run the production build (`npm run build`), and execute `semantic-release` (`npx semantic-release`) with permissions to tag and write releases.
    - A `.releaserc.json` or equivalent configuration file must be present to configure the required release plugins (`@semantic-release/commit-analyzer`, `@semantic-release/release-notes-generator`, `@semantic-release/github`).
 
+4. **Pull Requests, Branching & Code Review**:
+   - Always push changes to GitHub when a task is finished, behaving as a professional developer.
+   - Work on feature branches, open a Pull Request (PR) targeting `main` (or `master`), wait for GitHub Actions CI/CD validation to pass, and merge the PR.
+   - Merging to `main`/`master` is safe and recommended as it builds new semantic releases automatically. The user will handle local manual deployments in their staging/production environments.
