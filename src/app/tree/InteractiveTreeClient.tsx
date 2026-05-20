@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import QuickCreatePersonModal from "../components/QuickCreatePersonModal";
+import { parseDate } from "../../utils/dateParser";
 
 interface PersonNode {
   id: string;
@@ -85,6 +86,43 @@ export default function InteractiveTreeClient({ people, unions }: InteractiveTre
   const resetCamera = () => {
     setZoom(1);
     setPan({ x: 150, y: 100 });
+  };
+
+  const getYearOnly = (dateStr: string | null | undefined): string => {
+    if (!dateStr) return "";
+    const parsed = parseDate(dateStr);
+    return parsed.year ? String(parsed.year) : "";
+  };
+
+  const getRelationshipTag = (nodePerson: PersonNode): string => {
+    if (nodePerson.id === focusId) return "🟢 Sujet";
+    
+    // Check if parent
+    const fPerson = people.find(p => p.id === focusId);
+    if (fPerson) {
+      if (nodePerson.id === fPerson.fatherId) return "👨‍ PÈRE";
+      if (nodePerson.id === fPerson.motherId) return "👩‍ MÈRE";
+      
+      // Check if child
+      if (nodePerson.fatherId === focusId || nodePerson.motherId === focusId) return "👶 ENFANT";
+      
+      // Check if sibling
+      const sharesFather = fPerson.fatherId && nodePerson.fatherId === fPerson.fatherId;
+      const sharesMother = fPerson.motherId && nodePerson.motherId === fPerson.motherId;
+      if (sharesFather && sharesMother) {
+        return nodePerson.gender === "M" ? "👦 FRÈRE" : nodePerson.gender === "F" ? "👧 SŒUR" : "👤 FRATRIE";
+      } else if (sharesFather || sharesMother) {
+        return nodePerson.gender === "M" ? "👦 DEMI-FRÈRE" : nodePerson.gender === "F" ? "👧 DEMI-SŒUR" : "👤 DEMI-FRATRIE";
+      }
+    }
+    
+    // Check if spouse
+    const myUnions = unions.filter(u => u.partner1Id === focusId || u.partner2Id === focusId);
+    if (myUnions.some(u => u.partner1Id === nodePerson.id || u.partner2Id === nodePerson.id)) {
+      return "💍 CONJOINT";
+    }
+    
+    return "";
   };
 
   // Calculer la liste des personnes isolées (non reliées)
@@ -701,6 +739,7 @@ export default function InteractiveTreeClient({ people, unions }: InteractiveTre
               const isAnyDragging = !!draggedPersonId;
               const isCurrentDragged = draggedPersonId === person.id;
               const isOver = dragOverTarget?.type === "person" && dragOverTarget?.id === person.id;
+              const relationTag = getRelationshipTag(person);
               
               // Déterminer les couleurs de bordure/sexe et d'interaction
               const borderStyle = isOver ? "2px dashed var(--accent-emerald)" :
@@ -709,12 +748,13 @@ export default function InteractiveTreeClient({ people, unions }: InteractiveTre
                                   person.gender === "F" ? "2px solid rgba(236, 72, 153, 0.3)" : 
                                   "2px solid rgba(156, 163, 175, 0.3)";
                                   
-              const genderTagColor = person.gender === "M" ? "rgba(59, 130, 246, 0.12)" : 
+              const genderTagColor = isFocused ? "rgba(212, 175, 55, 0.16)" :
+                                     person.gender === "M" ? "rgba(59, 130, 246, 0.12)" : 
                                      person.gender === "F" ? "rgba(236, 72, 153, 0.12)" : 
                                      "rgba(156, 163, 175, 0.12)";
 
               const shadowStyle = isOver ? "0 0 20px rgba(16, 185, 129, 0.6)" :
-                                  isFocused ? "0 0 15px var(--accent-gold-glow)" : 
+                                  isFocused ? "0 0 20px var(--accent-gold-glow)" : 
                                   "0 4px 12px rgba(0,0,0,0.2)";
 
               const opacityStyle = isCurrentDragged ? 0.4 : isAnyDragging ? 0.85 : 1;
@@ -783,56 +823,73 @@ export default function InteractiveTreeClient({ people, unions }: InteractiveTre
                       }}
                     >
                       {/* En-tête de la carte */}
-                      <div style={{ display: "flex", gap: "0.5rem", alignItems: "center" }}>
-                        {person.avatarUrl ? (
-                          <img 
-                            src={person.avatarUrl} 
-                            alt="" 
-                            style={{ width: "36px", height: "36px", borderRadius: "18px", objectFit: "cover" }}
-                          />
-                        ) : (
-                          <span style={{ fontSize: "1.4rem" }}>
-                            {person.gender === "M" ? "👨‍" : person.gender === "F" ? "👩" : "👤"}
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", width: "100%" }}>
+                        <div style={{ display: "flex", gap: "0.5rem", alignItems: "center", overflow: "hidden", flex: 1 }}>
+                          {person.avatarUrl ? (
+                            <img 
+                              src={person.avatarUrl} 
+                              alt="" 
+                              style={{ width: "36px", height: "36px", borderRadius: "18px", objectFit: "cover" }}
+                            />
+                          ) : (
+                            <span style={{ fontSize: "1.4rem" }}>
+                              {person.gender === "M" ? "👨‍" : person.gender === "F" ? "👩" : "👤"}
+                            </span>
+                          )}
+                          <div style={{ display: "flex", flexDirection: "column", overflow: "hidden" }}>
+                            <strong 
+                              className="title-font"
+                              style={{ 
+                                fontSize: "0.82rem", 
+                                fontWeight: 700, 
+                                color: "var(--text-primary)",
+                                textOverflow: "ellipsis",
+                                overflow: "hidden",
+                                whiteSpace: "nowrap"
+                              }}
+                            >
+                              {person.firstName}
+                            </strong>
+                            <strong 
+                              className="title-font"
+                              style={{ 
+                                fontSize: "0.82rem", 
+                                fontWeight: 800, 
+                                color: isFocused ? "var(--accent-gold)" : "var(--text-primary)",
+                                textOverflow: "ellipsis",
+                                overflow: "hidden",
+                                whiteSpace: "nowrap",
+                                marginTop: "-0.15rem"
+                              }}
+                            >
+                              {person.lastName?.toUpperCase()}
+                            </strong>
+                          </div>
+                        </div>
+                        {relationTag && (
+                          <span style={{ 
+                            fontSize: "0.58rem", 
+                            padding: "0.15rem 0.35rem", 
+                            borderRadius: "4px", 
+                            background: isFocused ? "rgba(212, 175, 55, 0.22)" : "rgba(255, 255, 255, 0.08)",
+                            color: isFocused ? "var(--accent-gold)" : "var(--text-secondary)",
+                            border: isFocused ? "1px solid rgba(212, 175, 55, 0.4)" : "1px solid rgba(255, 255, 255, 0.1)",
+                            fontWeight: 600,
+                            whiteSpace: "nowrap",
+                            marginLeft: "0.25rem"
+                          }}>
+                            {relationTag}
                           </span>
                         )}
-                        <div style={{ display: "flex", flexDirection: "column", overflow: "hidden" }}>
-                          <strong 
-                            className="title-font"
-                            style={{ 
-                              fontSize: "0.85rem", 
-                              fontWeight: 700, 
-                              color: "var(--text-primary)",
-                              textOverflow: "ellipsis",
-                              overflow: "hidden",
-                              whiteSpace: "nowrap"
-                            }}
-                          >
-                            {person.firstName}
-                          </strong>
-                          <strong 
-                            className="title-font"
-                            style={{ 
-                              fontSize: "0.85rem", 
-                              fontWeight: 800, 
-                              color: isFocused ? "var(--accent-gold)" : "var(--text-primary)",
-                              textOverflow: "ellipsis",
-                              overflow: "hidden",
-                              whiteSpace: "nowrap",
-                              marginTop: "-0.15rem"
-                            }}
-                          >
-                            {person.lastName?.toUpperCase()}
-                          </strong>
-                        </div>
                       </div>
 
                       {/* Corps (Métier & dates) */}
                       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", fontSize: "0.75rem" }}>
-                        <span style={{ color: "var(--text-muted)", textOverflow: "ellipsis", overflow: "hidden", whiteSpace: "nowrap", maxWidth: "100px" }}>
+                        <span style={{ color: "var(--text-muted)", textOverflow: "ellipsis", overflow: "hidden", whiteSpace: "nowrap", maxWidth: "90px" }}>
                           {person.occupation || "—"}
                         </span>
                         <strong style={{ color: "var(--text-secondary)" }}>
-                          {person.birthDate ? person.birthDate.substring(0, 4) : "????"} - {person.deathDate ? person.deathDate.substring(0, 4) : person.gender === "M" ? "Vivant" : "Vivante"}
+                          {getYearOnly(person.birthDate) || "????"} - {getYearOnly(person.deathDate)}
                         </strong>
                       </div>
                     </div>

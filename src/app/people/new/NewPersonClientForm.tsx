@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { parseDate } from "../../../utils/dateParser";
 import { checkPersonConsistency } from "../../../utils/consistency";
+import PlaceInput from "../../components/PlaceInput";
 
 interface ParentOption {
   id: string;
@@ -288,13 +289,11 @@ export default function NewPersonClientForm({ males, females }: NewPersonClientF
           </div>
           <div className="input-group">
             <label className="input-label">Lieu de Naissance</label>
-            <input 
-              type="text" 
-              name="birthPlace" 
+            <PlaceInput
+              name="birthPlace"
               value={formData.birthPlace}
-              onChange={handleChange}
-              placeholder="ex: Paris 14e, France" 
-              className="input-field" 
+              onChange={(val) => setFormData((prev) => ({ ...prev, birthPlace: val }))}
+              placeholder="ex: Paris 14e, Lyon, Strasbourg"
             />
           </div>
         </div>
@@ -315,12 +314,11 @@ export default function NewPersonClientForm({ males, females }: NewPersonClientF
           </div>
           <div className="input-group">
             <label className="input-label">Lieu de Baptême</label>
-            <input 
-              type="text" 
-              name="baptismPlace" 
+            <PlaceInput
+              name="baptismPlace"
               value={formData.baptismPlace}
-              onChange={handleChange}
-              className="input-field" 
+              onChange={(val) => setFormData((prev) => ({ ...prev, baptismPlace: val }))}
+              placeholder="ex: Bordeaux, Nantes"
             />
           </div>
         </div>
@@ -341,13 +339,11 @@ export default function NewPersonClientForm({ males, females }: NewPersonClientF
           </div>
           <div className="input-group">
             <label className="input-label">Lieu de Décès</label>
-            <input 
-              type="text" 
-              name="deathPlace" 
+            <PlaceInput
+              name="deathPlace"
               value={formData.deathPlace}
-              onChange={handleChange}
-              placeholder="ex: Lyon, France" 
-              className="input-field" 
+              onChange={(val) => setFormData((prev) => ({ ...prev, deathPlace: val }))}
+              placeholder="ex: Lyon, France ou autre"
             />
           </div>
         </div>
@@ -368,12 +364,11 @@ export default function NewPersonClientForm({ males, females }: NewPersonClientF
           </div>
           <div className="input-group">
             <label className="input-label">Lieu d'Inhumation</label>
-            <input 
-              type="text" 
-              name="burialPlace" 
+            <PlaceInput
+              name="burialPlace"
               value={formData.burialPlace}
-              onChange={handleChange}
-              className="input-field" 
+              onChange={(val) => setFormData((prev) => ({ ...prev, burialPlace: val }))}
+              placeholder="ex: Cimetière du Père-Lachaise, Paris"
             />
           </div>
         </div>

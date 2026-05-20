@@ -156,7 +156,7 @@ export default async function Home() {
                       </span>
                     </div>
                     <span style={{ color: "var(--accent-emerald)", fontSize: "0.85rem", fontWeight: 600 }}>
-                      {p.birthDate ? p.birthDate.substring(0, 4) : "????"} - {p.deathDate ? p.deathDate.substring(0, 4) : p.gender === "M" ? "Vivant" : "Vivante"}
+                      {p.birthDate ? p.birthDate.substring(0, 4) : "????"}{p.deathDate ? ` - ${p.deathDate.substring(0, 4)}` : ""}
                     </span>
                   </a>
                 ))}

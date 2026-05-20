@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef } from "react";
 import { parseDate } from "../../utils/dateParser";
 import { checkPersonConsistency, ChronologyWarning } from "../../utils/consistency";
+import PlaceInput from "./PlaceInput";
 
 interface QuickCreatePersonModalProps {
   isOpen: boolean;
@@ -318,13 +319,11 @@ export default function QuickCreatePersonModal({
             </div>
             <div className="input-group" style={{ marginBottom: 0 }}>
               <label className="input-label" style={{ fontSize: "0.75rem" }}>Lieu de Naissance</label>
-              <input 
-                type="text" 
-                name="birthPlace" 
+              <PlaceInput
+                name="birthPlace"
                 value={formData.birthPlace}
-                onChange={handleChange}
-                placeholder="ex: Paris, France" 
-                className="input-field" 
+                onChange={(val) => setFormData((prev) => ({ ...prev, birthPlace: val }))}
+                placeholder="ex: Paris, Lyon (France ou autre)"
               />
             </div>
           </div>
@@ -345,13 +344,11 @@ export default function QuickCreatePersonModal({
             </div>
             <div className="input-group" style={{ marginBottom: 0 }}>
               <label className="input-label" style={{ fontSize: "0.75rem" }}>Lieu de Décès</label>
-              <input 
-                type="text" 
-                name="deathPlace" 
+              <PlaceInput
+                name="deathPlace"
                 value={formData.deathPlace}
-                onChange={handleChange}
-                placeholder="ex: Lyon, France" 
-                className="input-field" 
+                onChange={(val) => setFormData((prev) => ({ ...prev, deathPlace: val }))}
+                placeholder="ex: Lyon, Bordeaux (France ou autre)"
               />
             </div>
           </div>

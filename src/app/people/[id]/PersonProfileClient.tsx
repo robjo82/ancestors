@@ -3,9 +3,17 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { parseDate } from "../../../utils/dateParser";
+
+// Helper: extract only the year from a free-text date string
+const getYearOnly = (dateStr: string | null | undefined): string => {
+  if (!dateStr) return "";
+  const parsed = parseDate(dateStr);
+  return parsed.year ? String(parsed.year) : "";
+};
 import { checkPersonConsistency } from "../../../utils/consistency";
 import { computeSosaNumbering, computeAbovilleNumbering, computePelissierNumbering } from "../../../utils/numbering";
 import QuickCreatePersonModal from "../../components/QuickCreatePersonModal";
+import PlaceInput from "../../components/PlaceInput";
 
 interface Person {
   id: string;
@@ -711,7 +719,7 @@ export default function PersonProfileClient({
           )}
 
           <div style={{ color: "var(--accent-gold)", fontSize: "1.1rem", fontWeight: 600, marginTop: "0.5rem" }}>
-            📅 {person.birthDate ? person.birthDate.substring(0, 4) : "????"} - {person.deathDate ? person.deathDate.substring(0, 4) : "Vivant"}
+            📅 {getYearOnly(person.birthDate) || "????"}{person.deathDate ? ` - ${getYearOnly(person.deathDate)}` : ""}
           </div>
 
           <div style={{ color: "var(--text-secondary)", fontSize: "0.95rem", marginTop: "0.25rem" }}>
@@ -948,10 +956,10 @@ export default function PersonProfileClient({
                 
                 {!isEditingCivic ? (
                   <ul style={{ listStyle: "none", display: "flex", flexDirection: "column", gap: "0.75rem", fontSize: "0.95rem" }}>
-                    <li>👶 **Naissance :** {person.birthDate || "Inconnue"} {person.birthPlace ? `à ${person.birthPlace}` : ""}</li>
-                    {person.baptismDate && <li>👼 **Baptême :** {person.baptismDate} {person.baptismPlace ? `à ${person.baptismPlace}` : ""}</li>}
-                    <li>💀 **Décès :** {person.deathDate || "Vivant (ou inconnu)"} {person.deathPlace ? `à ${person.deathPlace}` : ""}</li>
-                    {person.burialDate && <li>⚰️ **Inhumation :** {person.burialDate} {person.burialPlace ? `à ${person.burialPlace}` : ""}</li>}
+                    <li>👶 <strong>Naissance :</strong> {person.birthDate || "Inconnue"} {person.birthPlace ? `à ${person.birthPlace}` : ""}</li>
+                    {person.baptismDate && <li>👼 <strong>Baptême :</strong> {person.baptismDate} {person.baptismPlace ? `à ${person.baptismPlace}` : ""}</li>}
+                    <li>💀 <strong>Décès :</strong> {person.deathDate || "—"} {person.deathPlace ? `à ${person.deathPlace}` : ""}</li>
+                    {person.burialDate && <li>⚰️ <strong>Inhumation :</strong> {person.burialDate} {person.burialPlace ? `à ${person.burialPlace}` : ""}</li>}
                   </ul>
                 ) : (
                   <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }} className="no-print">
@@ -989,7 +997,12 @@ export default function PersonProfileClient({
                     </div>
                     <div className="input-group">
                       <label className="input-label">Lieu de Naissance</label>
-                      <input type="text" className="input-field" value={civicData.birthPlace} onChange={e => setCivicData({...civicData, birthPlace: e.target.value})} />
+                      <PlaceInput
+                        name="birthPlace"
+                        value={civicData.birthPlace}
+                        onChange={(val) => setCivicData({...civicData, birthPlace: val})}
+                        placeholder="ex: Paris, Lyon, Strasbourg"
+                      />
                     </div>
 
                     <div className="input-group">
@@ -999,7 +1012,12 @@ export default function PersonProfileClient({
                     </div>
                     <div className="input-group">
                       <label className="input-label">Lieu de Baptême</label>
-                      <input type="text" className="input-field" value={civicData.baptismPlace} onChange={e => setCivicData({...civicData, baptismPlace: e.target.value})} />
+                      <PlaceInput
+                        name="baptismPlace"
+                        value={civicData.baptismPlace}
+                        onChange={(val) => setCivicData({...civicData, baptismPlace: val})}
+                        placeholder="ex: Bordeaux, Nantes"
+                      />
                     </div>
 
                     <div className="input-group">
@@ -1009,7 +1027,12 @@ export default function PersonProfileClient({
                     </div>
                     <div className="input-group">
                       <label className="input-label">Lieu de Décès</label>
-                      <input type="text" className="input-field" value={civicData.deathPlace} onChange={e => setCivicData({...civicData, deathPlace: e.target.value})} />
+                      <PlaceInput
+                        name="deathPlace"
+                        value={civicData.deathPlace}
+                        onChange={(val) => setCivicData({...civicData, deathPlace: val})}
+                        placeholder="ex: Lyon, Bordeaux"
+                      />
                     </div>
 
                     <div className="input-group">
@@ -1019,7 +1042,12 @@ export default function PersonProfileClient({
                     </div>
                     <div className="input-group">
                       <label className="input-label">Lieu d'Inhumation</label>
-                      <input type="text" className="input-field" value={civicData.burialPlace} onChange={e => setCivicData({...civicData, burialPlace: e.target.value})} />
+                      <PlaceInput
+                        name="burialPlace"
+                        value={civicData.burialPlace}
+                        onChange={(val) => setCivicData({...civicData, burialPlace: val})}
+                        placeholder="ex: Cimetière de la ville"
+                      />
                     </div>
 
                     {renderDraftConsistencyWarnings()}
@@ -1271,7 +1299,7 @@ export default function PersonProfileClient({
                     <a href={`/people/${person.father.id}`} className="card glass list-item-hover" style={{ borderLeft: "3px solid #2563eb", padding: "1rem", display: "flex", flexDirection: "column" }}>
                       <span style={{ fontSize: "0.8rem", color: "var(--text-muted)", fontWeight: 600 }}>👨‍🦳 PÈRE</span>
                       <strong>{person.father.firstName} {person.father.lastName.toUpperCase()}</strong>
-                      <span style={{ fontSize: "0.85rem", color: "var(--text-secondary)" }}>{person.father.birthDate || "????"} - {person.father.deathDate || "Vivant"}</span>
+                      <span style={{ fontSize: "0.85rem", color: "var(--text-secondary)" }}>{getYearOnly(person.father.birthDate) || "????"}{person.father.deathDate ? ` - ${getYearOnly(person.father.deathDate)}` : ""}</span>
                     </a>
                   ) : (
                     <div className="card glass" style={{ borderLeft: "3px solid var(--text-muted)", padding: "1.25rem", color: "var(--text-muted)" }}>
@@ -1284,7 +1312,7 @@ export default function PersonProfileClient({
                     <a href={`/people/${person.mother.id}`} className="card glass list-item-hover" style={{ borderLeft: "3px solid #db2777", padding: "1rem", display: "flex", flexDirection: "column" }}>
                       <span style={{ fontSize: "0.8rem", color: "var(--text-muted)", fontWeight: 600 }}>👩‍🦳 MÈRE</span>
                       <strong>{person.mother.firstName} {person.mother.lastName.toUpperCase()}</strong>
-                      <span style={{ fontSize: "0.85rem", color: "var(--text-secondary)" }}>{person.mother.birthDate || "????"} - {person.mother.deathDate || "Vivant"}</span>
+                      <span style={{ fontSize: "0.85rem", color: "var(--text-secondary)" }}>{getYearOnly(person.mother.birthDate) || "????"}{person.mother.deathDate ? ` - ${getYearOnly(person.mother.deathDate)}` : ""}</span>
                     </a>
                   ) : (
                     <div className="card glass" style={{ borderLeft: "3px solid var(--text-muted)", padding: "1.25rem", color: "var(--text-muted)" }}>
@@ -1458,7 +1486,7 @@ export default function PersonProfileClient({
                   {children.map(c => (
                     <a key={c.id} href={`/people/${c.id}`} className="card glass list-item-hover print-link" style={{ padding: "0.75rem 1rem", borderLeft: c.gender === "M" ? "2px solid #2563eb" : "2px solid #db2777", display: "flex", flexDirection: "column" }}>
                       <strong>{c.firstName} {c.lastName?.toUpperCase()}</strong>
-                      <span style={{ fontSize: "0.85rem", color: "var(--text-secondary)" }}>{c.birthDate || "????"} - {c.deathDate || "Vivant"}</span>
+                      <span style={{ fontSize: "0.85rem", color: "var(--text-secondary)" }}>{getYearOnly(c.birthDate) || "????"}{c.deathDate ? ` - ${getYearOnly(c.deathDate)}` : ""}</span>
                     </a>
                   ))}
                 </div>
