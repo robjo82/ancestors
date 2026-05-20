@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { parseDate } from "../../../utils/dateParser";
 import { checkPersonConsistency } from "../../../utils/consistency";
 import { computeSosaNumbering, computeAbovilleNumbering, computePelissierNumbering } from "../../../utils/numbering";
+import QuickCreatePersonModal from "../../components/QuickCreatePersonModal";
 
 interface Person {
   id: string;
@@ -116,6 +117,118 @@ export default function PersonProfileClient({
     notes: "",
   });
   const [savingUnion, setSavingUnion] = useState(false);
+
+  // État de création rapide d'individus
+  const [quickCreateModalOpen, setQuickCreateModalOpen] = useState(false);
+  const [quickCreateConfig, setQuickCreateConfig] = useState<{
+    type: "father" | "mother" | "spouse" | "child";
+    initialGender: string;
+    initialLastName: string;
+  }>({
+    type: "father",
+    initialGender: "M",
+    initialLastName: ""
+  });
+  const [newlyCreatedPeople, setNewlyCreatedPeople] = useState<any[]>([]);
+
+  // État d'association d'enfant
+  const [isAddingChild, setIsAddingChild] = useState(false);
+  const [selectedChildId, setSelectedChildId] = useState("");
+  const [savingChild, setSavingChild] = useState(false);
+
+  // Combinaison des listes avec les individus créés à la volée
+  const mergedFathers = [
+    ...potentialFathers,
+    ...newlyCreatedPeople.filter(p => p.gender === "M" && !potentialFathers.some(f => f.id === p.id))
+  ];
+  const mergedMothers = [
+    ...potentialMothers,
+    ...newlyCreatedPeople.filter(p => p.gender === "F" && !potentialMothers.some(m => m.id === p.id))
+  ];
+  const mergedAllPeople = [
+    ...allPeople,
+    ...newlyCreatedPeople.filter(p => !allPeople.some(ap => ap.id === p.id))
+  ];
+
+  const handleQuickCreateSuccess = (newPerson: any) => {
+    setNewlyCreatedPeople(prev => [...prev, newPerson]);
+    if (quickCreateConfig.type === "father") {
+      setSelectedFatherId(newPerson.id);
+    } else if (quickCreateConfig.type === "mother") {
+      setSelectedMotherId(newPerson.id);
+    } else if (quickCreateConfig.type === "spouse") {
+      setNewUnionData(prev => ({ ...prev, partner2Id: newPerson.id }));
+    } else if (quickCreateConfig.type === "child") {
+      setSelectedChildId(newPerson.id);
+    }
+    router.refresh();
+  };
+
+  const triggerQuickCreateFather = () => {
+    setQuickCreateConfig({
+      type: "father",
+      initialGender: "M",
+      initialLastName: person.lastName || ""
+    });
+    setQuickCreateModalOpen(true);
+  };
+
+  const triggerQuickCreateMother = () => {
+    setQuickCreateConfig({
+      type: "mother",
+      initialGender: "F",
+      initialLastName: ""
+    });
+    setQuickCreateModalOpen(true);
+  };
+
+  const triggerQuickCreateSpouse = () => {
+    setQuickCreateConfig({
+      type: "spouse",
+      initialGender: person.gender === "M" ? "F" : person.gender === "F" ? "M" : "U",
+      initialLastName: ""
+    });
+    setQuickCreateModalOpen(true);
+  };
+
+  const triggerQuickCreateChild = () => {
+    setQuickCreateConfig({
+      type: "child",
+      initialGender: "U",
+      initialLastName: person.gender === "M" ? person.lastName || "" : ""
+    });
+    setQuickCreateModalOpen(true);
+  };
+
+  const handleAddChildSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedChildId) return;
+
+    setSavingChild(true);
+    try {
+      const parentField = person.gender === "M" ? "fatherId" : "motherId";
+      const response = await fetch(`/api/people/${selectedChildId}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          [parentField]: person.id
+        })
+      });
+
+      if (response.ok) {
+        setIsAddingChild(false);
+        setSelectedChildId("");
+        router.refresh();
+      } else {
+        const data = await response.json();
+        alert(data.error || "Erreur lors de l'association de l'enfant.");
+      }
+    } catch (err) {
+      alert("Erreur réseau.");
+    } finally {
+      setSavingChild(false);
+    }
+  };
 
   // État de téléversement de média
   const [uploadData, setUploadData] = useState({
@@ -1114,21 +1227,41 @@ export default function PersonProfileClient({
                 <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "1rem" }} className="no-print">
                   <div className="input-group">
                     <label className="input-label">Père</label>
-                    <select value={selectedFatherId} onChange={(e) => setSelectedFatherId(e.target.value)} className="input-field">
-                      <option value="">-- Aucun père --</option>
-                      {potentialFathers.map(f => (
-                        <option key={f.id} value={f.id}>{f.firstName} {f.lastName.toUpperCase()} {f.birthDate ? `(${f.birthDate.substring(0,4)})` : ""}</option>
-                      ))}
-                    </select>
+                    <div style={{ display: "flex", gap: "0.5rem" }}>
+                      <select value={selectedFatherId} onChange={(e) => setSelectedFatherId(e.target.value)} className="input-field" style={{ flex: 1 }}>
+                        <option value="">-- Aucun père --</option>
+                        {mergedFathers.map(f => (
+                          <option key={f.id} value={f.id}>{f.firstName} {f.lastName.toUpperCase()} {f.birthDate ? `(${f.birthDate.substring(0,4)})` : ""}</option>
+                        ))}
+                      </select>
+                      <button 
+                        type="button" 
+                        onClick={triggerQuickCreateFather} 
+                        className="btn btn-secondary" 
+                        style={{ padding: "0.5rem", whiteSpace: "nowrap", display: "flex", alignItems: "center", gap: "0.25rem" }}
+                      >
+                        ➕ Créer
+                      </button>
+                    </div>
                   </div>
                   <div className="input-group">
                     <label className="input-label">Mère</label>
-                    <select value={selectedMotherId} onChange={(e) => setSelectedMotherId(e.target.value)} className="input-field">
-                      <option value="">-- Aucune mère --</option>
-                      {potentialMothers.map(m => (
-                        <option key={m.id} value={m.id}>{m.firstName} {m.lastName.toUpperCase()} {m.birthDate ? `(${m.birthDate.substring(0,4)})` : ""}</option>
-                      ))}
-                    </select>
+                    <div style={{ display: "flex", gap: "0.5rem" }}>
+                      <select value={selectedMotherId} onChange={(e) => setSelectedMotherId(e.target.value)} className="input-field" style={{ flex: 1 }}>
+                        <option value="">-- Aucune mère --</option>
+                        {mergedMothers.map(m => (
+                          <option key={m.id} value={m.id}>{m.firstName} {m.lastName.toUpperCase()} {m.birthDate ? `(${m.birthDate.substring(0,4)})` : ""}</option>
+                        ))}
+                      </select>
+                      <button 
+                        type="button" 
+                        onClick={triggerQuickCreateMother} 
+                        className="btn btn-secondary" 
+                        style={{ padding: "0.5rem", whiteSpace: "nowrap", display: "flex", alignItems: "center", gap: "0.25rem" }}
+                      >
+                        ➕ Créer
+                      </button>
+                    </div>
                   </div>
                 </div>
               ) : (
@@ -1178,17 +1311,28 @@ export default function PersonProfileClient({
                   <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "1rem" }}>
                     <div className="input-group">
                       <label className="input-label">Conjoint <span style={{ color: "var(--accent-gold)" }}>*</span></label>
-                      <select 
-                        required
-                        value={newUnionData.partner2Id} 
-                        onChange={(e) => setNewUnionData(prev => ({ ...prev, partner2Id: e.target.value }))}
-                        className="input-field"
-                      >
-                        <option value="">-- Sélectionner le conjoint --</option>
-                        {allPeople.map(p => (
-                          <option key={p.id} value={p.id}>{p.firstName} {p.lastName.toUpperCase()} {p.birthDate ? `(${p.birthDate.substring(0,4)})` : ""}</option>
-                        ))}
-                      </select>
+                      <div style={{ display: "flex", gap: "0.5rem" }}>
+                        <select 
+                          required
+                          value={newUnionData.partner2Id} 
+                          onChange={(e) => setNewUnionData(prev => ({ ...prev, partner2Id: e.target.value }))}
+                          className="input-field"
+                          style={{ flex: 1 }}
+                        >
+                          <option value="">-- Sélectionner le conjoint --</option>
+                          {mergedAllPeople.map(p => (
+                            <option key={p.id} value={p.id}>{p.firstName} {p.lastName.toUpperCase()} {p.birthDate ? `(${p.birthDate.substring(0,4)})` : ""}</option>
+                          ))}
+                        </select>
+                        <button 
+                          type="button" 
+                          onClick={triggerQuickCreateSpouse} 
+                          className="btn btn-secondary" 
+                          style={{ padding: "0.5rem", whiteSpace: "nowrap", display: "flex", alignItems: "center", gap: "0.25rem" }}
+                        >
+                          ➕ Créer
+                        </button>
+                      </div>
                     </div>
                     <div className="input-group">
                       <label className="input-label">Type d'Union</label>
@@ -1257,9 +1401,55 @@ export default function PersonProfileClient({
 
             {/* Ligne des Enfants */}
             <div className="card glass">
-              <h3 className="title-font" style={{ fontSize: "1.3rem", color: "var(--accent-gold)", marginBottom: "1rem" }}>
-                👶 Enfants ({children.length})
-              </h3>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1rem" }}>
+                <h3 className="title-font" style={{ fontSize: "1.3rem", color: "var(--accent-gold)", margin: 0 }}>
+                  👶 Enfants ({children.length})
+                </h3>
+                <button 
+                  onClick={() => setIsAddingChild(!isAddingChild)} 
+                  className="btn btn-primary no-print" 
+                  style={{ padding: "0.4rem 0.8rem", fontSize: "0.85rem" }}
+                >
+                  {isAddingChild ? "Fermer" : "Ajouter / Créer un Enfant"}
+                </button>
+              </div>
+
+              {isAddingChild && (
+                <form onSubmit={handleAddChildSubmit} className="card no-print" style={{ background: "var(--bg-tertiary)", padding: "1rem", marginBottom: "1.5rem", display: "flex", flexDirection: "column", gap: "1rem" }}>
+                  <div className="input-group">
+                    <label className="input-label">Sélectionner ou créer un enfant</label>
+                    <div style={{ display: "flex", gap: "0.5rem" }}>
+                      <select 
+                        required
+                        value={selectedChildId} 
+                        onChange={(e) => setSelectedChildId(e.target.value)}
+                        className="input-field"
+                        style={{ flex: 1 }}
+                      >
+                        <option value="">-- Sélectionner l'enfant --</option>
+                        {mergedAllPeople
+                          .filter(p => p.id !== person.id && (person.gender === "M" ? !p.fatherId : !p.motherId))
+                          .map(p => (
+                            <option key={p.id} value={p.id}>{p.firstName} {p.lastName.toUpperCase()} {p.birthDate ? `(${p.birthDate.substring(0,4)})` : ""}</option>
+                          ))}
+                      </select>
+                      <button 
+                        type="button" 
+                        onClick={triggerQuickCreateChild} 
+                        className="btn btn-secondary" 
+                        style={{ padding: "0.5rem", whiteSpace: "nowrap", display: "flex", alignItems: "center", gap: "0.25rem" }}
+                      >
+                        ➕ Créer
+                      </button>
+                    </div>
+                  </div>
+                  <div style={{ display: "flex", justifyContent: "flex-end", gap: "0.5rem" }}>
+                    <button type="submit" className="btn btn-primary" disabled={savingChild || !selectedChildId}>
+                      {savingChild ? "Enregistrement..." : "Associer l'enfant"}
+                    </button>
+                  </div>
+                </form>
+              )}
 
               {children.length === 0 ? (
                 <p style={{ color: "var(--text-muted)", fontStyle: "italic" }}>Aucun enfant n'est enregistré pour cette personne.</p>
@@ -1518,6 +1708,23 @@ export default function PersonProfileClient({
 
           </div>
         )}
+
+        <QuickCreatePersonModal
+          isOpen={quickCreateModalOpen}
+          onClose={() => setQuickCreateModalOpen(false)}
+          onSuccess={handleQuickCreateSuccess}
+          initialGender={quickCreateConfig.initialGender}
+          initialLastName={quickCreateConfig.initialLastName}
+          title={`Ajouter un ${
+            quickCreateConfig.type === "father"
+              ? "Père"
+              : quickCreateConfig.type === "mother"
+              ? "Mère"
+              : quickCreateConfig.type === "spouse"
+              ? "Conjoint"
+              : "Enfant"
+          }`}
+        />
 
       </div>
     </div>
