@@ -3,8 +3,17 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { parseDate } from "../../../utils/dateParser";
+
+// Helper: extract only the year from a free-text date string
+const getYearOnly = (dateStr: string | null | undefined): string => {
+  if (!dateStr) return "";
+  const parsed = parseDate(dateStr);
+  return parsed.year ? String(parsed.year) : "";
+};
 import { checkPersonConsistency } from "../../../utils/consistency";
 import { computeSosaNumbering, computeAbovilleNumbering, computePelissierNumbering } from "../../../utils/numbering";
+import QuickCreatePersonModal from "../../components/QuickCreatePersonModal";
+import PlaceInput from "../../components/PlaceInput";
 
 interface Person {
   id: string;
@@ -116,6 +125,118 @@ export default function PersonProfileClient({
     notes: "",
   });
   const [savingUnion, setSavingUnion] = useState(false);
+
+  // État de création rapide d'individus
+  const [quickCreateModalOpen, setQuickCreateModalOpen] = useState(false);
+  const [quickCreateConfig, setQuickCreateConfig] = useState<{
+    type: "father" | "mother" | "spouse" | "child";
+    initialGender: string;
+    initialLastName: string;
+  }>({
+    type: "father",
+    initialGender: "M",
+    initialLastName: ""
+  });
+  const [newlyCreatedPeople, setNewlyCreatedPeople] = useState<any[]>([]);
+
+  // État d'association d'enfant
+  const [isAddingChild, setIsAddingChild] = useState(false);
+  const [selectedChildId, setSelectedChildId] = useState("");
+  const [savingChild, setSavingChild] = useState(false);
+
+  // Combinaison des listes avec les individus créés à la volée
+  const mergedFathers = [
+    ...potentialFathers,
+    ...newlyCreatedPeople.filter(p => p.gender === "M" && !potentialFathers.some(f => f.id === p.id))
+  ];
+  const mergedMothers = [
+    ...potentialMothers,
+    ...newlyCreatedPeople.filter(p => p.gender === "F" && !potentialMothers.some(m => m.id === p.id))
+  ];
+  const mergedAllPeople = [
+    ...allPeople,
+    ...newlyCreatedPeople.filter(p => !allPeople.some(ap => ap.id === p.id))
+  ];
+
+  const handleQuickCreateSuccess = (newPerson: any) => {
+    setNewlyCreatedPeople(prev => [...prev, newPerson]);
+    if (quickCreateConfig.type === "father") {
+      setSelectedFatherId(newPerson.id);
+    } else if (quickCreateConfig.type === "mother") {
+      setSelectedMotherId(newPerson.id);
+    } else if (quickCreateConfig.type === "spouse") {
+      setNewUnionData(prev => ({ ...prev, partner2Id: newPerson.id }));
+    } else if (quickCreateConfig.type === "child") {
+      setSelectedChildId(newPerson.id);
+    }
+    router.refresh();
+  };
+
+  const triggerQuickCreateFather = () => {
+    setQuickCreateConfig({
+      type: "father",
+      initialGender: "M",
+      initialLastName: person.lastName || ""
+    });
+    setQuickCreateModalOpen(true);
+  };
+
+  const triggerQuickCreateMother = () => {
+    setQuickCreateConfig({
+      type: "mother",
+      initialGender: "F",
+      initialLastName: ""
+    });
+    setQuickCreateModalOpen(true);
+  };
+
+  const triggerQuickCreateSpouse = () => {
+    setQuickCreateConfig({
+      type: "spouse",
+      initialGender: person.gender === "M" ? "F" : person.gender === "F" ? "M" : "U",
+      initialLastName: ""
+    });
+    setQuickCreateModalOpen(true);
+  };
+
+  const triggerQuickCreateChild = () => {
+    setQuickCreateConfig({
+      type: "child",
+      initialGender: "U",
+      initialLastName: person.gender === "M" ? person.lastName || "" : ""
+    });
+    setQuickCreateModalOpen(true);
+  };
+
+  const handleAddChildSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedChildId) return;
+
+    setSavingChild(true);
+    try {
+      const parentField = person.gender === "M" ? "fatherId" : "motherId";
+      const response = await fetch(`/api/people/${selectedChildId}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          [parentField]: person.id
+        })
+      });
+
+      if (response.ok) {
+        setIsAddingChild(false);
+        setSelectedChildId("");
+        router.refresh();
+      } else {
+        const data = await response.json();
+        alert(data.error || "Erreur lors de l'association de l'enfant.");
+      }
+    } catch (err) {
+      alert("Erreur réseau.");
+    } finally {
+      setSavingChild(false);
+    }
+  };
 
   // État de téléversement de média
   const [uploadData, setUploadData] = useState({
@@ -598,7 +719,7 @@ export default function PersonProfileClient({
           )}
 
           <div style={{ color: "var(--accent-gold)", fontSize: "1.1rem", fontWeight: 600, marginTop: "0.5rem" }}>
-            📅 {person.birthDate ? person.birthDate.substring(0, 4) : "????"} - {person.deathDate ? person.deathDate.substring(0, 4) : "Vivant"}
+            📅 {getYearOnly(person.birthDate) || "????"}{person.deathDate ? ` - ${getYearOnly(person.deathDate)}` : ""}
           </div>
 
           <div style={{ color: "var(--text-secondary)", fontSize: "0.95rem", marginTop: "0.25rem" }}>
@@ -835,10 +956,10 @@ export default function PersonProfileClient({
                 
                 {!isEditingCivic ? (
                   <ul style={{ listStyle: "none", display: "flex", flexDirection: "column", gap: "0.75rem", fontSize: "0.95rem" }}>
-                    <li>👶 **Naissance :** {person.birthDate || "Inconnue"} {person.birthPlace ? `à ${person.birthPlace}` : ""}</li>
-                    {person.baptismDate && <li>👼 **Baptême :** {person.baptismDate} {person.baptismPlace ? `à ${person.baptismPlace}` : ""}</li>}
-                    <li>💀 **Décès :** {person.deathDate || "Vivant (ou inconnu)"} {person.deathPlace ? `à ${person.deathPlace}` : ""}</li>
-                    {person.burialDate && <li>⚰️ **Inhumation :** {person.burialDate} {person.burialPlace ? `à ${person.burialPlace}` : ""}</li>}
+                    <li>👶 <strong>Naissance :</strong> {person.birthDate || "Inconnue"} {person.birthPlace ? `à ${person.birthPlace}` : ""}</li>
+                    {person.baptismDate && <li>👼 <strong>Baptême :</strong> {person.baptismDate} {person.baptismPlace ? `à ${person.baptismPlace}` : ""}</li>}
+                    <li>💀 <strong>Décès :</strong> {person.deathDate || "—"} {person.deathPlace ? `à ${person.deathPlace}` : ""}</li>
+                    {person.burialDate && <li>⚰️ <strong>Inhumation :</strong> {person.burialDate} {person.burialPlace ? `à ${person.burialPlace}` : ""}</li>}
                   </ul>
                 ) : (
                   <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }} className="no-print">
@@ -876,7 +997,12 @@ export default function PersonProfileClient({
                     </div>
                     <div className="input-group">
                       <label className="input-label">Lieu de Naissance</label>
-                      <input type="text" className="input-field" value={civicData.birthPlace} onChange={e => setCivicData({...civicData, birthPlace: e.target.value})} />
+                      <PlaceInput
+                        name="birthPlace"
+                        value={civicData.birthPlace}
+                        onChange={(val) => setCivicData({...civicData, birthPlace: val})}
+                        placeholder="ex: Paris, Lyon, Strasbourg"
+                      />
                     </div>
 
                     <div className="input-group">
@@ -886,7 +1012,12 @@ export default function PersonProfileClient({
                     </div>
                     <div className="input-group">
                       <label className="input-label">Lieu de Baptême</label>
-                      <input type="text" className="input-field" value={civicData.baptismPlace} onChange={e => setCivicData({...civicData, baptismPlace: e.target.value})} />
+                      <PlaceInput
+                        name="baptismPlace"
+                        value={civicData.baptismPlace}
+                        onChange={(val) => setCivicData({...civicData, baptismPlace: val})}
+                        placeholder="ex: Bordeaux, Nantes"
+                      />
                     </div>
 
                     <div className="input-group">
@@ -896,7 +1027,12 @@ export default function PersonProfileClient({
                     </div>
                     <div className="input-group">
                       <label className="input-label">Lieu de Décès</label>
-                      <input type="text" className="input-field" value={civicData.deathPlace} onChange={e => setCivicData({...civicData, deathPlace: e.target.value})} />
+                      <PlaceInput
+                        name="deathPlace"
+                        value={civicData.deathPlace}
+                        onChange={(val) => setCivicData({...civicData, deathPlace: val})}
+                        placeholder="ex: Lyon, Bordeaux"
+                      />
                     </div>
 
                     <div className="input-group">
@@ -906,7 +1042,12 @@ export default function PersonProfileClient({
                     </div>
                     <div className="input-group">
                       <label className="input-label">Lieu d'Inhumation</label>
-                      <input type="text" className="input-field" value={civicData.burialPlace} onChange={e => setCivicData({...civicData, burialPlace: e.target.value})} />
+                      <PlaceInput
+                        name="burialPlace"
+                        value={civicData.burialPlace}
+                        onChange={(val) => setCivicData({...civicData, burialPlace: val})}
+                        placeholder="ex: Cimetière de la ville"
+                      />
                     </div>
 
                     {renderDraftConsistencyWarnings()}
@@ -1114,21 +1255,41 @@ export default function PersonProfileClient({
                 <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "1rem" }} className="no-print">
                   <div className="input-group">
                     <label className="input-label">Père</label>
-                    <select value={selectedFatherId} onChange={(e) => setSelectedFatherId(e.target.value)} className="input-field">
-                      <option value="">-- Aucun père --</option>
-                      {potentialFathers.map(f => (
-                        <option key={f.id} value={f.id}>{f.firstName} {f.lastName.toUpperCase()} {f.birthDate ? `(${f.birthDate.substring(0,4)})` : ""}</option>
-                      ))}
-                    </select>
+                    <div style={{ display: "flex", gap: "0.5rem" }}>
+                      <select value={selectedFatherId} onChange={(e) => setSelectedFatherId(e.target.value)} className="input-field" style={{ flex: 1 }}>
+                        <option value="">-- Aucun père --</option>
+                        {mergedFathers.map(f => (
+                          <option key={f.id} value={f.id}>{f.firstName} {f.lastName.toUpperCase()} {f.birthDate ? `(${f.birthDate.substring(0,4)})` : ""}</option>
+                        ))}
+                      </select>
+                      <button 
+                        type="button" 
+                        onClick={triggerQuickCreateFather} 
+                        className="btn btn-secondary" 
+                        style={{ padding: "0.5rem", whiteSpace: "nowrap", display: "flex", alignItems: "center", gap: "0.25rem" }}
+                      >
+                        ➕ Créer
+                      </button>
+                    </div>
                   </div>
                   <div className="input-group">
                     <label className="input-label">Mère</label>
-                    <select value={selectedMotherId} onChange={(e) => setSelectedMotherId(e.target.value)} className="input-field">
-                      <option value="">-- Aucune mère --</option>
-                      {potentialMothers.map(m => (
-                        <option key={m.id} value={m.id}>{m.firstName} {m.lastName.toUpperCase()} {m.birthDate ? `(${m.birthDate.substring(0,4)})` : ""}</option>
-                      ))}
-                    </select>
+                    <div style={{ display: "flex", gap: "0.5rem" }}>
+                      <select value={selectedMotherId} onChange={(e) => setSelectedMotherId(e.target.value)} className="input-field" style={{ flex: 1 }}>
+                        <option value="">-- Aucune mère --</option>
+                        {mergedMothers.map(m => (
+                          <option key={m.id} value={m.id}>{m.firstName} {m.lastName.toUpperCase()} {m.birthDate ? `(${m.birthDate.substring(0,4)})` : ""}</option>
+                        ))}
+                      </select>
+                      <button 
+                        type="button" 
+                        onClick={triggerQuickCreateMother} 
+                        className="btn btn-secondary" 
+                        style={{ padding: "0.5rem", whiteSpace: "nowrap", display: "flex", alignItems: "center", gap: "0.25rem" }}
+                      >
+                        ➕ Créer
+                      </button>
+                    </div>
                   </div>
                 </div>
               ) : (
@@ -1138,7 +1299,7 @@ export default function PersonProfileClient({
                     <a href={`/people/${person.father.id}`} className="card glass list-item-hover" style={{ borderLeft: "3px solid #2563eb", padding: "1rem", display: "flex", flexDirection: "column" }}>
                       <span style={{ fontSize: "0.8rem", color: "var(--text-muted)", fontWeight: 600 }}>👨‍🦳 PÈRE</span>
                       <strong>{person.father.firstName} {person.father.lastName.toUpperCase()}</strong>
-                      <span style={{ fontSize: "0.85rem", color: "var(--text-secondary)" }}>{person.father.birthDate || "????"} - {person.father.deathDate || "Vivant"}</span>
+                      <span style={{ fontSize: "0.85rem", color: "var(--text-secondary)" }}>{getYearOnly(person.father.birthDate) || "????"}{person.father.deathDate ? ` - ${getYearOnly(person.father.deathDate)}` : ""}</span>
                     </a>
                   ) : (
                     <div className="card glass" style={{ borderLeft: "3px solid var(--text-muted)", padding: "1.25rem", color: "var(--text-muted)" }}>
@@ -1151,7 +1312,7 @@ export default function PersonProfileClient({
                     <a href={`/people/${person.mother.id}`} className="card glass list-item-hover" style={{ borderLeft: "3px solid #db2777", padding: "1rem", display: "flex", flexDirection: "column" }}>
                       <span style={{ fontSize: "0.8rem", color: "var(--text-muted)", fontWeight: 600 }}>👩‍🦳 MÈRE</span>
                       <strong>{person.mother.firstName} {person.mother.lastName.toUpperCase()}</strong>
-                      <span style={{ fontSize: "0.85rem", color: "var(--text-secondary)" }}>{person.mother.birthDate || "????"} - {person.mother.deathDate || "Vivant"}</span>
+                      <span style={{ fontSize: "0.85rem", color: "var(--text-secondary)" }}>{getYearOnly(person.mother.birthDate) || "????"}{person.mother.deathDate ? ` - ${getYearOnly(person.mother.deathDate)}` : ""}</span>
                     </a>
                   ) : (
                     <div className="card glass" style={{ borderLeft: "3px solid var(--text-muted)", padding: "1.25rem", color: "var(--text-muted)" }}>
@@ -1178,17 +1339,28 @@ export default function PersonProfileClient({
                   <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "1rem" }}>
                     <div className="input-group">
                       <label className="input-label">Conjoint <span style={{ color: "var(--accent-gold)" }}>*</span></label>
-                      <select 
-                        required
-                        value={newUnionData.partner2Id} 
-                        onChange={(e) => setNewUnionData(prev => ({ ...prev, partner2Id: e.target.value }))}
-                        className="input-field"
-                      >
-                        <option value="">-- Sélectionner le conjoint --</option>
-                        {allPeople.map(p => (
-                          <option key={p.id} value={p.id}>{p.firstName} {p.lastName.toUpperCase()} {p.birthDate ? `(${p.birthDate.substring(0,4)})` : ""}</option>
-                        ))}
-                      </select>
+                      <div style={{ display: "flex", gap: "0.5rem" }}>
+                        <select 
+                          required
+                          value={newUnionData.partner2Id} 
+                          onChange={(e) => setNewUnionData(prev => ({ ...prev, partner2Id: e.target.value }))}
+                          className="input-field"
+                          style={{ flex: 1 }}
+                        >
+                          <option value="">-- Sélectionner le conjoint --</option>
+                          {mergedAllPeople.map(p => (
+                            <option key={p.id} value={p.id}>{p.firstName} {p.lastName.toUpperCase()} {p.birthDate ? `(${p.birthDate.substring(0,4)})` : ""}</option>
+                          ))}
+                        </select>
+                        <button 
+                          type="button" 
+                          onClick={triggerQuickCreateSpouse} 
+                          className="btn btn-secondary" 
+                          style={{ padding: "0.5rem", whiteSpace: "nowrap", display: "flex", alignItems: "center", gap: "0.25rem" }}
+                        >
+                          ➕ Créer
+                        </button>
+                      </div>
                     </div>
                     <div className="input-group">
                       <label className="input-label">Type d'Union</label>
@@ -1257,9 +1429,55 @@ export default function PersonProfileClient({
 
             {/* Ligne des Enfants */}
             <div className="card glass">
-              <h3 className="title-font" style={{ fontSize: "1.3rem", color: "var(--accent-gold)", marginBottom: "1rem" }}>
-                👶 Enfants ({children.length})
-              </h3>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1rem" }}>
+                <h3 className="title-font" style={{ fontSize: "1.3rem", color: "var(--accent-gold)", margin: 0 }}>
+                  👶 Enfants ({children.length})
+                </h3>
+                <button 
+                  onClick={() => setIsAddingChild(!isAddingChild)} 
+                  className="btn btn-primary no-print" 
+                  style={{ padding: "0.4rem 0.8rem", fontSize: "0.85rem" }}
+                >
+                  {isAddingChild ? "Fermer" : "Ajouter / Créer un Enfant"}
+                </button>
+              </div>
+
+              {isAddingChild && (
+                <form onSubmit={handleAddChildSubmit} className="card no-print" style={{ background: "var(--bg-tertiary)", padding: "1rem", marginBottom: "1.5rem", display: "flex", flexDirection: "column", gap: "1rem" }}>
+                  <div className="input-group">
+                    <label className="input-label">Sélectionner ou créer un enfant</label>
+                    <div style={{ display: "flex", gap: "0.5rem" }}>
+                      <select 
+                        required
+                        value={selectedChildId} 
+                        onChange={(e) => setSelectedChildId(e.target.value)}
+                        className="input-field"
+                        style={{ flex: 1 }}
+                      >
+                        <option value="">-- Sélectionner l'enfant --</option>
+                        {mergedAllPeople
+                          .filter(p => p.id !== person.id && (person.gender === "M" ? !p.fatherId : !p.motherId))
+                          .map(p => (
+                            <option key={p.id} value={p.id}>{p.firstName} {p.lastName.toUpperCase()} {p.birthDate ? `(${p.birthDate.substring(0,4)})` : ""}</option>
+                          ))}
+                      </select>
+                      <button 
+                        type="button" 
+                        onClick={triggerQuickCreateChild} 
+                        className="btn btn-secondary" 
+                        style={{ padding: "0.5rem", whiteSpace: "nowrap", display: "flex", alignItems: "center", gap: "0.25rem" }}
+                      >
+                        ➕ Créer
+                      </button>
+                    </div>
+                  </div>
+                  <div style={{ display: "flex", justifyContent: "flex-end", gap: "0.5rem" }}>
+                    <button type="submit" className="btn btn-primary" disabled={savingChild || !selectedChildId}>
+                      {savingChild ? "Enregistrement..." : "Associer l'enfant"}
+                    </button>
+                  </div>
+                </form>
+              )}
 
               {children.length === 0 ? (
                 <p style={{ color: "var(--text-muted)", fontStyle: "italic" }}>Aucun enfant n'est enregistré pour cette personne.</p>
@@ -1268,7 +1486,7 @@ export default function PersonProfileClient({
                   {children.map(c => (
                     <a key={c.id} href={`/people/${c.id}`} className="card glass list-item-hover print-link" style={{ padding: "0.75rem 1rem", borderLeft: c.gender === "M" ? "2px solid #2563eb" : "2px solid #db2777", display: "flex", flexDirection: "column" }}>
                       <strong>{c.firstName} {c.lastName?.toUpperCase()}</strong>
-                      <span style={{ fontSize: "0.85rem", color: "var(--text-secondary)" }}>{c.birthDate || "????"} - {c.deathDate || "Vivant"}</span>
+                      <span style={{ fontSize: "0.85rem", color: "var(--text-secondary)" }}>{getYearOnly(c.birthDate) || "????"}{c.deathDate ? ` - ${getYearOnly(c.deathDate)}` : ""}</span>
                     </a>
                   ))}
                 </div>
@@ -1518,6 +1736,23 @@ export default function PersonProfileClient({
 
           </div>
         )}
+
+        <QuickCreatePersonModal
+          isOpen={quickCreateModalOpen}
+          onClose={() => setQuickCreateModalOpen(false)}
+          onSuccess={handleQuickCreateSuccess}
+          initialGender={quickCreateConfig.initialGender}
+          initialLastName={quickCreateConfig.initialLastName}
+          title={`Ajouter un ${
+            quickCreateConfig.type === "father"
+              ? "Père"
+              : quickCreateConfig.type === "mother"
+              ? "Mère"
+              : quickCreateConfig.type === "spouse"
+              ? "Conjoint"
+              : "Enfant"
+          }`}
+        />
 
       </div>
     </div>

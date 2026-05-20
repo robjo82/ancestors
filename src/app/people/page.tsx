@@ -189,16 +189,16 @@ export default async function PeopleDirectoryPage({
 
                   <div style={{ fontSize: "0.85rem", color: "var(--text-secondary)", display: "flex", flexDirection: "column", gap: "0.25rem" }}>
                     <div>
-                      📅 **Dates :** {p.birthDate ? p.birthDate.substring(0, 4) : "????"} - {p.deathDate ? p.deathDate.substring(0, 4) : p.gender === "M" ? "Vivant" : "Vivante"}
+                      📅 {p.birthDate ? p.birthDate.substring(0, 4) : "????"}{p.deathDate ? ` - ${p.deathDate.substring(0, 4)}` : ""}
                     </div>
                     {p.birthPlace && (
                       <div style={{ textOverflow: "ellipsis", overflow: "hidden", whiteSpace: "nowrap" }}>
-                        📍 **Naissance :** {p.birthPlace}
+                        📍 <strong>Naissance :</strong> {p.birthPlace}
                       </div>
                     )}
                     {p.occupation && (
                       <div style={{ textOverflow: "ellipsis", overflow: "hidden", whiteSpace: "nowrap" }}>
-                        💼 **Métier :** {p.occupation}
+                        💼 <strong>Métier :</strong> {p.occupation}
                       </div>
                     )}
                   </div>

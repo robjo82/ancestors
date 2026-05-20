@@ -80,8 +80,8 @@ export function parseDate(dateStr: string | null | undefined): ParsedDate {
   // Remove small joining words like "le", "in", "on", "the", "en", "de"
   cleaned = cleaned.replace(/\b(le|la|en|in|on|the|de|of)\b/g, "").replace(/\s+/g, " ").trim();
 
-  // 2. Try parsing numeric formats: DD/MM/YYYY, DD-MM-YYYY, DD.MM.YYYY
-  const numericDateRegex = /^(\d{1,2})[\/\-\.](\d{1,2})[\/\-\.](\d{3,4})$/;
+  // 2. Try parsing numeric formats: DD/MM/YYYY, DD-MM-YYYY, DD.MM.YYYY, DD MM YYYY
+  const numericDateRegex = /^(\d{1,2})[\/\-\.\s]+(\d{1,2})[\/\-\.\s]+(\d{3,4})$/;
   const numericMatch = cleaned.match(numericDateRegex);
   if (numericMatch) {
     const day = parseInt(numericMatch[1], 10);
