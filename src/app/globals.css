@@ -363,7 +363,29 @@ button, input, select, textarea {
   animation: fadeIn 0.3s ease-out;
 }
 
+/* Micro-interactions & Premium active states */
+.btn, .card, .list-item-hover, select, input, .navbar-link {
+  transition: transform 0.15s cubic-bezier(0.2, 0.8, 0.2, 1), background-color 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.btn:active, .list-item-hover:active, select:active, input[type="submit"]:active, .navbar-link:active {
+  transform: scale(0.96) !important;
+  opacity: 0.95;
+}
+
+.card.list-item-hover:hover {
+  transform: translateY(-3px);
+  border-color: var(--accent-emerald) !important;
+  box-shadow: 0 8px 24px var(--accent-emerald-glow) !important;
+}
+
+.btn:focus-visible, .input-field:focus-visible, select:focus-visible {
+  outline: 2px solid var(--accent-emerald) !important;
+  outline-offset: 2px;
+}
+
 /* Highly polished printable booklet styling */
+
 @media print {
   body, html {
     background: #ffffff !important;

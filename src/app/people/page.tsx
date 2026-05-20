@@ -1,6 +1,12 @@
 import { prisma } from "../../lib/db";
 import { getCurrentUser, getActiveTreeIdForUser } from "../../lib/auth";
 import { redirect } from "next/navigation";
+import { parseDate } from "../../utils/dateParser";
+
+const getYearOnly = (dateStr: string | null | undefined): string => {
+  const parsed = parseDate(dateStr);
+  return parsed.year ? String(parsed.year) : "";
+};
 
 export default async function PeopleDirectoryPage({
   searchParams,
@@ -82,9 +88,14 @@ export default async function PeopleDirectoryPage({
               Parcourez et filtrez tous les membres enregistrés dans votre généalogie.
             </p>
           </div>
-          <a href="/people/new" className="btn btn-accent" style={{ borderRadius: "8px" }}>
-            ➕ Ajouter un individu
-          </a>
+          <div style={{ display: "flex", gap: "1rem" }}>
+            <a href="/people/duplicates" className="btn btn-secondary" style={{ borderRadius: "8px" }}>
+              🔍 Détecter les doublons
+            </a>
+            <a href="/people/new" className="btn btn-accent" style={{ borderRadius: "8px" }}>
+              ➕ Ajouter un individu
+            </a>
+          </div>
         </div>
 
         {/* Formulaire de recherche et filtres */}
@@ -189,7 +200,7 @@ export default async function PeopleDirectoryPage({
 
                   <div style={{ fontSize: "0.85rem", color: "var(--text-secondary)", display: "flex", flexDirection: "column", gap: "0.25rem" }}>
                     <div>
-                      📅 {p.birthDate ? p.birthDate.substring(0, 4) : "????"}{p.deathDate ? ` - ${p.deathDate.substring(0, 4)}` : ""}
+                      📅 {getYearOnly(p.birthDate) || "????"}{p.deathDate ? ` - ${getYearOnly(p.deathDate)}` : ""}
                     </div>
                     {p.birthPlace && (
                       <div style={{ textOverflow: "ellipsis", overflow: "hidden", whiteSpace: "nowrap" }}>
