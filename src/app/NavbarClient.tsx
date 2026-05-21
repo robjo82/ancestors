@@ -226,6 +226,9 @@ export default function NavbarClient({ user, trees, activeTreeId }: NavbarClient
         <Link href="/import-export" className={`navbar-link ${pathname === "/import-export" ? "active" : ""}`}>
           📤 GEDCOM
         </Link>
+        <Link href="/admin" className={`navbar-link ${pathname.startsWith("/admin") ? "active" : ""}`}>
+          🛠️ Admin
+        </Link>
       </nav>
 
       {/* User Controls */}

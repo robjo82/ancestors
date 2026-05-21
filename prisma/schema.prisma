@@ -109,3 +109,14 @@ model Media {
 
   person      Person   @relation(fields: [personId], references: [id], onDelete: Cascade)
 }
+
+model FeatureRequest {
+  id          String   @id @default(uuid())
+  title       String
+  description String
+  category    String   @default("other") // "ui", "performance", "import-export", "familysearch", "other"
+  status      String   @default("PENDING") // "PENDING", "PLANNED", "COMPLETED", "REJECTED"
+  userEmail   String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}

@@ -34,6 +34,13 @@ export default function SettingsPage() {
   const [profileMessage, setProfileMessage] = useState({ text: "", type: "" }); // type: 'success' | 'error'
   const [passwordMessage, setPasswordMessage] = useState({ text: "", type: "" }); // type: 'success' | 'error'
 
+  // Feature Request state
+  const [featureTitle, setFeatureTitle] = useState("");
+  const [featureCategory, setFeatureCategory] = useState("other");
+  const [featureDescription, setFeatureDescription] = useState("");
+  const [featureSubmitting, setFeatureSubmitting] = useState(false);
+  const [featureMessage, setFeatureMessage] = useState({ text: "", type: "" }); // type: 'success' | 'error'
+
   useEffect(() => {
     fetchProfile();
     fetchFamilySearchStatus();
@@ -173,6 +180,49 @@ export default function SettingsPage() {
       setPasswordMessage({ text: "Erreur de connexion avec le serveur.", type: "error" });
     } finally {
       setPasswordSubmitting(false);
+    }
+  };
+
+  const handleFeatureSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setFeatureMessage({ text: "", type: "" });
+
+    if (!featureTitle.trim() || !featureDescription.trim()) {
+      setFeatureMessage({ text: "Le titre et la description sont requis.", type: "error" });
+      return;
+    }
+
+    setFeatureSubmitting(true);
+
+    try {
+      const response = await fetch("/api/features", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          title: featureTitle,
+          category: featureCategory,
+          description: featureDescription,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        setFeatureMessage({
+          text: "Votre suggestion de fonctionnalité a été soumise avec succès !",
+          type: "success",
+        });
+        setFeatureTitle("");
+        setFeatureCategory("other");
+        setFeatureDescription("");
+      } else {
+        setFeatureMessage({ text: data.error || "Une erreur est survenue.", type: "error" });
+      }
+    } catch (err) {
+      console.error(err);
+      setFeatureMessage({ text: "Erreur de connexion avec le serveur.", type: "error" });
+    } finally {
+      setFeatureSubmitting(false);
     }
   };
 
@@ -455,6 +505,97 @@ export default function SettingsPage() {
             <div style={{ display: "flex", justifyContent: "flex-end" }}>
               <button type="submit" className="btn btn-primary" disabled={passwordSubmitting}>
                 {passwordSubmitting ? "Modification..." : "Modifier le mot de passe"}
+              </button>
+            </div>
+          </form>
+        </div>
+
+        {/* Suggest Feature Card */}
+        <div className="card glass" style={{ padding: "2rem" }}>
+          <h2
+            className="title-font"
+            style={{
+              fontSize: "1.4rem",
+              fontWeight: 700,
+              color: "var(--accent-gold)",
+              marginBottom: "1.5rem",
+              borderBottom: "1px solid var(--border-subtle)",
+              paddingBottom: "0.75rem",
+              display: "flex",
+              alignItems: "center",
+              gap: "0.5rem"
+            }}
+          >
+            💡 Suggérer une fonctionnalité
+          </h2>
+
+          <p style={{ color: "var(--text-secondary)", fontSize: "0.95rem", marginBottom: "1.5rem" }}>
+            Une idée pour améliorer Ancestors ? Dites-nous ce que vous aimeriez voir ajouté dans les prochaines mises à jour de l'application !
+          </p>
+
+          {featureMessage.text && (
+            <div
+              style={{
+                background: featureMessage.type === "success" ? "rgba(16, 185, 129, 0.15)" : "rgba(239, 68, 68, 0.15)",
+                border: featureMessage.type === "success" ? "1px solid rgba(16, 185, 129, 0.3)" : "1px solid rgba(239, 68, 68, 0.3)",
+                color: featureMessage.type === "success" ? "hsl(142, 70%, 75%)" : "hsl(0, 85%, 75%)",
+                borderRadius: "8px",
+                padding: "0.75rem 1rem",
+                marginBottom: "1.5rem",
+                fontSize: "0.9rem"
+              }}
+            >
+              {featureMessage.type === "success" ? "✅" : "⚠️"} {featureMessage.text}
+            </div>
+          )}
+
+          <form onSubmit={handleFeatureSubmit}>
+            <div className="input-group">
+              <label className="input-label">Titre de la suggestion</label>
+              <input
+                type="text"
+                className="input-field"
+                placeholder="Ex : Recherche globale de doublons"
+                value={featureTitle}
+                onChange={(e) => setFeatureTitle(e.target.value)}
+                disabled={featureSubmitting}
+                required
+              />
+            </div>
+
+            <div className="input-group">
+              <label className="input-label">Catégorie</label>
+              <select
+                className="input-field"
+                style={{ appearance: "none", cursor: "pointer" }}
+                value={featureCategory}
+                onChange={(e) => setFeatureCategory(e.target.value)}
+                disabled={featureSubmitting}
+              >
+                <option value="ui">🖥️ Ergonomie & Interface</option>
+                <option value="performance">⚡ Performance</option>
+                <option value="import-export">📤 Import / Export GEDCOM</option>
+                <option value="familysearch">🌍 FamilySearch & Actes publics</option>
+                <option value="other">💡 Autre suggestion</option>
+              </select>
+            </div>
+
+            <div className="input-group" style={{ marginBottom: "2rem" }}>
+              <label className="input-label">Description détaillée</label>
+              <textarea
+                className="input-field"
+                style={{ minHeight: "120px", resize: "vertical", fontFamily: "inherit" }}
+                placeholder="Expliquez en détail votre besoin, l'usage prévu et les bénéfices pour votre recherche..."
+                value={featureDescription}
+                onChange={(e) => setFeatureDescription(e.target.value)}
+                disabled={featureSubmitting}
+                required
+              />
+            </div>
+
+            <div style={{ display: "flex", justifyContent: "flex-end" }}>
+              <button type="submit" className="btn btn-primary" disabled={featureSubmitting}>
+                {featureSubmitting ? "Envoi en cours..." : "💡 Soumettre la suggestion"}
               </button>
             </div>
           </form>
