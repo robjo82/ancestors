@@ -44,6 +44,8 @@ interface TreeLink {
   toX: number;
   toY: number;
   color?: string;
+  fromPersonId?: string;
+  toPersonId?: string;
 }
 
 export default function InteractiveTreeClient({ people, unions }: InteractiveTreeClientProps) {
@@ -263,6 +265,94 @@ export default function InteractiveTreeClient({ people, unions }: InteractiveTre
 
   const focusPerson = people.find(p => p.id === focusId) || people[0];
 
+  // Calcul des distances d'indirectivité par rapport au focusId (BFS)
+  const getIndirectDistances = (): Record<string, number> => {
+    const distances: Record<string, number> = {};
+    if (!focusId || people.length === 0) return distances;
+
+    // A. Trouver tous les ancêtres directs
+    const directAncestors = new Set<string>();
+    const findAncestors = (id: string) => {
+      if (!id || directAncestors.has(id)) return;
+      directAncestors.add(id);
+      const person = people.find(p => p.id === id);
+      if (person) {
+        if (person.fatherId) findAncestors(person.fatherId);
+        if (person.motherId) findAncestors(person.motherId);
+      }
+    };
+    findAncestors(focusId);
+
+    // B. Trouver tous les descendants directs
+    const directDescendants = new Set<string>();
+    const findDescendants = (id: string) => {
+      if (!id || directDescendants.has(id)) return;
+      directDescendants.add(id);
+      const children = people.filter(p => p.fatherId === id || p.motherId === id);
+      children.forEach(c => findDescendants(c.id));
+    };
+    findDescendants(focusId);
+
+    // C. La lignée directe est l'union des ancêtres et descendants
+    const directLine = new Set<string>([...directAncestors, ...directDescendants]);
+
+    // Initialiser les distances de la lignée directe à 0
+    directLine.forEach(id => {
+      distances[id] = 0;
+    });
+
+    // D. BFS pour propager la distance aux lignes indirectes
+    const queue: string[] = Array.from(directLine);
+    const adj: Record<string, Set<string>> = {};
+    
+    people.forEach(p => {
+      if (!adj[p.id]) adj[p.id] = new Set();
+      if (p.fatherId) {
+        adj[p.id].add(p.fatherId);
+        if (!adj[p.fatherId]) adj[p.fatherId] = new Set();
+        adj[p.fatherId].add(p.id);
+      }
+      if (p.motherId) {
+        adj[p.id].add(p.motherId);
+        if (!adj[p.motherId]) adj[p.motherId] = new Set();
+        adj[p.motherId].add(p.id);
+      }
+    });
+
+    unions.forEach(u => {
+      if (u.partner1Id && u.partner2Id) {
+        if (!adj[u.partner1Id]) adj[u.partner1Id] = new Set();
+        adj[u.partner1Id].add(u.partner2Id);
+        if (!adj[u.partner2Id]) adj[u.partner2Id] = new Set();
+        adj[u.partner2Id].add(u.partner1Id);
+      }
+    });
+
+    while (queue.length > 0) {
+      const u = queue.shift()!;
+      const currentDist = distances[u];
+      const neighbors = adj[u];
+      if (neighbors) {
+        neighbors.forEach(v => {
+          if (distances[v] === undefined) {
+            distances[v] = currentDist + 1;
+            queue.push(v);
+          }
+        });
+      }
+    }
+
+    people.forEach(p => {
+      if (distances[p.id] === undefined) {
+        distances[p.id] = 999;
+      }
+    });
+
+    return distances;
+  };
+
+  const distances = getIndirectDistances();
+
   // ==========================================
   // CALCUL DES LAYOUTS (COORDONNÉES DES NŒUDS)
   // ==========================================
@@ -310,6 +400,8 @@ export default function InteractiveTreeClient({ people, unions }: InteractiveTre
             toX: nodeX + gWidth,
             toY: fatherY + CARD_HEIGHT / 2,
             color: "rgba(59, 130, 246, 0.4)",
+            fromPersonId: person.id,
+            toPersonId: person.fatherId,
           });
         } else if (gen + 1 < maxGenerations) {
           const fatherY = nodeY - halfSpan;
@@ -320,6 +412,7 @@ export default function InteractiveTreeClient({ people, unions }: InteractiveTre
             toX: nodeX + gWidth,
             toY: fatherY + CARD_HEIGHT / 2,
             color: "rgba(59, 130, 246, 0.12)",
+            fromPersonId: person.id,
           });
         }
         
@@ -333,6 +426,8 @@ export default function InteractiveTreeClient({ people, unions }: InteractiveTre
             toX: nodeX + gWidth,
             toY: motherY + CARD_HEIGHT / 2,
             color: "rgba(236, 72, 153, 0.4)",
+            fromPersonId: person.id,
+            toPersonId: person.motherId,
           });
         } else if (gen + 1 < maxGenerations) {
           const motherY = nodeY + halfSpan;
@@ -343,6 +438,7 @@ export default function InteractiveTreeClient({ people, unions }: InteractiveTre
             toX: nodeX + gWidth,
             toY: motherY + CARD_HEIGHT / 2,
             color: "rgba(236, 72, 153, 0.12)",
+            fromPersonId: person.id,
           });
         }
       };
@@ -383,6 +479,8 @@ export default function InteractiveTreeClient({ people, unions }: InteractiveTre
             toX: childX + CARD_WIDTH / 2,
             toY: (gen + 1) * gHeight,
             color: child.gender === "M" ? "rgba(59, 130, 246, 0.3)" : "rgba(236, 72, 153, 0.3)",
+            fromPersonId: person.id,
+            toPersonId: child.id,
           });
         });
       };
@@ -407,13 +505,28 @@ export default function InteractiveTreeClient({ people, unions }: InteractiveTre
           const fX = centerX - 130;
           const fY = centerY - 150;
           nodes.push({ person: father, x: fX, y: fY, generation: -1 });
-          links.push({ fromX: fX + CARD_WIDTH / 2, fromY: fY + CARD_HEIGHT, toX: centerX + CARD_WIDTH / 3, toY: centerY, color: "rgba(59, 130, 246, 0.4)" });
+          links.push({ 
+            fromX: fX + CARD_WIDTH / 2, 
+            fromY: fY + CARD_HEIGHT, 
+            toX: centerX + CARD_WIDTH / 3, 
+            toY: centerY, 
+            color: "rgba(59, 130, 246, 0.4)",
+            fromPersonId: father.id,
+            toPersonId: focusPerson.id,
+          });
         }
       } else {
         const fX = centerX - 130;
         const fY = centerY - 150;
         placeholders.push({ type: "father", targetPersonId: focusPerson.id, x: fX, y: fY });
-        links.push({ fromX: fX + CARD_WIDTH / 2, fromY: fY + CARD_HEIGHT, toX: centerX + CARD_WIDTH / 3, toY: centerY, color: "rgba(59, 130, 246, 0.12)" });
+        links.push({ 
+          fromX: fX + CARD_WIDTH / 2, 
+          fromY: fY + CARD_HEIGHT, 
+          toX: centerX + CARD_WIDTH / 3, 
+          toY: centerY, 
+          color: "rgba(59, 130, 246, 0.12)",
+          toPersonId: focusPerson.id,
+        });
       }
       
       if (focusPerson.motherId) {
@@ -422,13 +535,28 @@ export default function InteractiveTreeClient({ people, unions }: InteractiveTre
           const mX = centerX + 130;
           const mY = centerY - 150;
           nodes.push({ person: mother, x: mX, y: mY, generation: -1 });
-          links.push({ fromX: mX + CARD_WIDTH / 2, fromY: mY + CARD_HEIGHT, toX: centerX + (CARD_WIDTH * 2) / 3, toY: centerY, color: "rgba(236, 72, 153, 0.4)" });
+          links.push({ 
+            fromX: mX + CARD_WIDTH / 2, 
+            fromY: mY + CARD_HEIGHT, 
+            toX: centerX + (CARD_WIDTH * 2) / 3, 
+            toY: centerY, 
+            color: "rgba(236, 72, 153, 0.4)",
+            fromPersonId: mother.id,
+            toPersonId: focusPerson.id,
+          });
         }
       } else {
         const mX = centerX + 130;
         const mY = centerY - 150;
         placeholders.push({ type: "mother", targetPersonId: focusPerson.id, x: mX, y: mY });
-        links.push({ fromX: mX + CARD_WIDTH / 2, fromY: mY + CARD_HEIGHT, toX: centerX + (CARD_WIDTH * 2) / 3, toY: centerY, color: "rgba(236, 72, 153, 0.12)" });
+        links.push({ 
+          fromX: mX + CARD_WIDTH / 2, 
+          fromY: mY + CARD_HEIGHT, 
+          toX: centerX + (CARD_WIDTH * 2) / 3, 
+          toY: centerY, 
+          color: "rgba(236, 72, 153, 0.12)",
+          toPersonId: focusPerson.id,
+        });
       }
       
       // C. Ses conjoints à côté (droite)
@@ -447,6 +575,8 @@ export default function InteractiveTreeClient({ people, unions }: InteractiveTre
             toX: pX,
             toY: pY + CARD_HEIGHT / 2,
             color: "var(--accent-gold)",
+            fromPersonId: focusPerson.id,
+            toPersonId: partner.id,
           });
         }
       });
@@ -459,7 +589,8 @@ export default function InteractiveTreeClient({ people, unions }: InteractiveTre
         fromY: centerY + CARD_HEIGHT / 2,
         toX: spX,
         toY: centerY + CARD_HEIGHT / 2,
-        color: "rgba(212, 175, 55, 0.15)"
+        color: "rgba(212, 175, 55, 0.15)",
+        fromPersonId: focusPerson.id,
       });
       
       // D. Ses enfants au-dessous
@@ -476,6 +607,8 @@ export default function InteractiveTreeClient({ people, unions }: InteractiveTre
           toX: cX + CARD_WIDTH / 2,
           toY: cY,
           color: c.gender === "M" ? "rgba(59, 130, 246, 0.3)" : "rgba(236, 72, 153, 0.3)",
+          fromPersonId: focusPerson.id,
+          toPersonId: c.id,
         });
       });
       
@@ -496,6 +629,8 @@ export default function InteractiveTreeClient({ people, unions }: InteractiveTre
           toX: centerX,
           toY: centerY + CARD_HEIGHT / 2,
           color: "rgba(255,255,255,0.12)",
+          fromPersonId: s.id,
+          toPersonId: focusPerson.id,
         });
       });
     }
@@ -692,6 +827,35 @@ export default function InteractiveTreeClient({ people, unions }: InteractiveTre
             ➖
           </button>
         </div>
+
+        {/* Légende de Lignée (Colorimétrie progressive) */}
+        <div style={{ borderTop: "1px solid var(--border-subtle)", paddingTop: "0.75rem", marginTop: "0.25rem", display: "flex", flexDirection: "column", gap: "0.5rem" }}>
+          <span style={{ fontSize: "0.68rem", fontWeight: 700, color: "var(--text-secondary)", textTransform: "uppercase", letterSpacing: "0.05em" }}>
+            ⚖️ Intensité de la Lignée
+          </span>
+          <div style={{ display: "flex", flexDirection: "column", gap: "0.4rem" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", fontSize: "0.7rem" }}>
+              <span style={{ width: "12px", height: "12px", borderRadius: "3.5px", background: "linear-gradient(135deg, rgba(59, 130, 246, 0.35), rgba(236, 72, 153, 0.35))", border: "1.5px solid rgba(255,255,255,0.4)" }}></span>
+              <span style={{ color: "var(--text-primary)", fontWeight: 600 }}>Lignée Directe</span>
+              <span style={{ color: "var(--text-muted)", marginLeft: "auto", fontSize: "0.65rem" }}>Asc. / Desc. directs</span>
+            </div>
+            <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", fontSize: "0.7rem" }}>
+              <span style={{ width: "12px", height: "12px", borderRadius: "3.5px", background: "rgba(156, 163, 175, 0.08)", border: "1.5px solid rgba(156, 163, 175, 0.3)" }}></span>
+              <span style={{ color: "var(--text-secondary)" }}>1er degré indirect</span>
+              <span style={{ color: "var(--text-muted)", marginLeft: "auto", fontSize: "0.65rem" }}>Frères, Conjoints</span>
+            </div>
+            <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", fontSize: "0.7rem" }}>
+              <span style={{ width: "12px", height: "12px", borderRadius: "3.5px", background: "rgba(148, 163, 184, 0.04)", border: "1px dashed rgba(148, 163, 184, 0.25)" }}></span>
+              <span style={{ color: "var(--text-muted)" }}>2e degré indirect</span>
+              <span style={{ color: "var(--text-muted)", marginLeft: "auto", fontSize: "0.65rem" }}>Oncles, Neveux</span>
+            </div>
+            <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", fontSize: "0.7rem" }}>
+              <span style={{ width: "12px", height: "12px", borderRadius: "3.5px", background: "rgba(148, 163, 184, 0.02)", border: "1px dotted rgba(148, 163, 184, 0.15)", opacity: 0.55 }}></span>
+              <span style={{ color: "var(--text-muted)", opacity: 0.7 }}>Branches distantes</span>
+              <span style={{ color: "var(--text-muted)", marginLeft: "auto", fontSize: "0.65rem", opacity: 0.7 }}>Cousins éloignés</span>
+            </div>
+          </div>
+        </div>
       </div>
 
       {/* 2. LE CANVAS SVG DE RENDU DE L'ARBRE */}
@@ -719,19 +883,70 @@ export default function InteractiveTreeClient({ people, unions }: InteractiveTre
           <g transform={`translate(${pan.x}, ${pan.y}) scale(${zoom})`} style={{ pointerEvents: "all" }}>
             
             {/* Rendu des lignes de liaison */}
-            {links.map((link, idx) => (
-              <g key={`l-${idx}`}>
-                {/* Ligne coudée élégante (chemin orthogonal ou direct) */}
-                <path 
-                  d={`M ${link.fromX} ${link.fromY} L ${(link.fromX + link.toX) / 2} ${link.fromY} L ${(link.fromX + link.toX) / 2} ${link.toY} L ${link.toX} ${link.toY}`}
-                  fill="none" 
-                  stroke={link.color || "rgba(255, 255, 255, 0.18)"} 
-                  strokeWidth="2.5" 
-                  strokeLinecap="round"
-                  style={{ transition: "stroke 0.2s" }}
-                />
-              </g>
-            ))}
+            {links.map((link, idx) => {
+              // Custom line styles based on distances
+              const dFrom = link.fromPersonId ? distances[link.fromPersonId] : undefined;
+              const dTo = link.toPersonId ? distances[link.toPersonId] : undefined;
+              
+              // We take the max distance to determine how indirect this link is.
+              let dist = 0;
+              if (dFrom !== undefined && dTo !== undefined) {
+                dist = Math.max(dFrom, dTo);
+              } else if (dFrom !== undefined) {
+                dist = dFrom;
+              } else if (dTo !== undefined) {
+                dist = dTo;
+              }
+
+              let strokeColor = link.color || "rgba(255, 255, 255, 0.18)";
+              let strokeWidth = "2.5";
+              let strokeDasharray = undefined;
+
+              if (dist === 0) {
+                strokeColor = link.color || "rgba(255, 255, 255, 0.25)";
+                strokeWidth = "2.5";
+              } else if (dist === 1) {
+                if (link.color === "var(--accent-gold)") {
+                  strokeColor = "rgba(212, 175, 55, 0.6)";
+                } else if (link.color) {
+                  strokeColor = link.color.includes("rgba") ? link.color.replace(/0\.\d+\)/, "0.22)") : link.color;
+                } else {
+                  strokeColor = "rgba(255, 255, 255, 0.14)";
+                }
+                strokeWidth = "1.8";
+              } else if (dist === 2) {
+                if (link.color === "var(--accent-gold)") {
+                  strokeColor = "rgba(212, 175, 55, 0.3)";
+                } else {
+                  strokeColor = "rgba(148, 163, 184, 0.2)";
+                }
+                strokeWidth = "1.2";
+                strokeDasharray = "4,4";
+              } else {
+                if (link.color === "var(--accent-gold)") {
+                  strokeColor = "rgba(212, 175, 55, 0.15)";
+                } else {
+                  strokeColor = "rgba(148, 163, 184, 0.1)";
+                }
+                strokeWidth = "1";
+                strokeDasharray = "2,4";
+              }
+
+              return (
+                <g key={`l-${idx}`}>
+                  {/* Ligne coudée élégante (chemin orthogonal ou direct) */}
+                  <path 
+                    d={`M ${link.fromX} ${link.fromY} L ${(link.fromX + link.toX) / 2} ${link.fromY} L ${(link.fromX + link.toX) / 2} ${link.toY} L ${link.toX} ${link.toY}`}
+                    fill="none" 
+                    stroke={strokeColor} 
+                    strokeWidth={strokeWidth}
+                    strokeDasharray={strokeDasharray}
+                    strokeLinecap="round"
+                    style={{ transition: "all 0.2s" }}
+                  />
+                </g>
+              );
+            })}
 
             {/* Rendu des nœuds (Personnes) */}
             {nodes.map(({ person, x, y }) => {
@@ -740,25 +955,72 @@ export default function InteractiveTreeClient({ people, unions }: InteractiveTre
               const isCurrentDragged = draggedPersonId === person.id;
               const isOver = dragOverTarget?.type === "person" && dragOverTarget?.id === person.id;
               const relationTag = getRelationshipTag(person);
+              const dist = distances[person.id] ?? 0;
               
               // Déterminer les couleurs de bordure/sexe et d'interaction
+              let baseBorderColor = person.gender === "M" ? "rgba(59, 130, 246, 0.45)" : 
+                                    person.gender === "F" ? "rgba(236, 72, 153, 0.45)" : 
+                                    "rgba(156, 163, 175, 0.45)";
+              let borderType = "solid";
+              let borderWidth = "2px";
+
+              if (dist === 1) {
+                baseBorderColor = person.gender === "M" ? "rgba(59, 130, 246, 0.3)" : 
+                                  person.gender === "F" ? "rgba(236, 72, 153, 0.3)" : 
+                                  "rgba(156, 163, 175, 0.3)";
+                borderWidth = "1.5px";
+              } else if (dist === 2) {
+                baseBorderColor = "rgba(148, 163, 184, 0.25)";
+                borderWidth = "1px";
+                borderType = "dashed";
+              } else if (dist >= 3) {
+                baseBorderColor = "rgba(148, 163, 184, 0.15)";
+                borderWidth = "1px";
+                borderType = "dotted";
+              }
+
               const borderStyle = isOver ? "2px dashed var(--accent-emerald)" :
-                                  isFocused ? "2px solid var(--accent-gold)" :
-                                  person.gender === "M" ? "2px solid rgba(59, 130, 246, 0.3)" : 
-                                  person.gender === "F" ? "2px solid rgba(236, 72, 153, 0.3)" : 
-                                  "2px solid rgba(156, 163, 175, 0.3)";
+                                  isFocused ? "2.5px solid var(--accent-gold)" :
+                                  `${borderWidth} ${borderType} ${baseBorderColor}`;
                                   
-              const genderTagColor = isFocused ? "rgba(212, 175, 55, 0.16)" :
-                                     person.gender === "M" ? "rgba(59, 130, 246, 0.12)" : 
-                                     person.gender === "F" ? "rgba(236, 72, 153, 0.12)" : 
-                                     "rgba(156, 163, 175, 0.12)";
+              // Background glass color with gender tints and distance fading
+              let genderTagColor = "rgba(255, 255, 255, 0.03)";
+              if (dist === 0) {
+                genderTagColor = isFocused ? "rgba(212, 175, 55, 0.16)" :
+                                 person.gender === "M" ? "rgba(59, 130, 246, 0.14)" : 
+                                 person.gender === "F" ? "rgba(236, 72, 153, 0.14)" : 
+                                 "rgba(156, 163, 175, 0.12)";
+              } else if (dist === 1) {
+                genderTagColor = isFocused ? "rgba(212, 175, 55, 0.12)" :
+                                 person.gender === "M" ? "rgba(59, 130, 246, 0.08)" : 
+                                 person.gender === "F" ? "rgba(236, 72, 153, 0.08)" : 
+                                 "rgba(156, 163, 175, 0.07)";
+              } else if (dist === 2) {
+                genderTagColor = "rgba(148, 163, 184, 0.04)";
+              } else {
+                genderTagColor = "rgba(148, 163, 184, 0.02)";
+              }
 
               const shadowStyle = isOver ? "0 0 20px rgba(16, 185, 129, 0.6)" :
                                   isFocused ? "0 0 20px var(--accent-gold-glow)" : 
-                                  "0 4px 12px rgba(0,0,0,0.2)";
+                                  dist === 0 ? "0 6px 16px rgba(0,0,0,0.3)" :
+                                  dist === 1 ? "0 4px 10px rgba(0,0,0,0.2)" :
+                                  "0 2px 6px rgba(0,0,0,0.1)";
 
-              const opacityStyle = isCurrentDragged ? 0.4 : isAnyDragging ? 0.85 : 1;
+              let baseOpacity = 1;
+              if (dist === 1) baseOpacity = 0.85;
+              else if (dist === 2) baseOpacity = 0.7;
+              else if (dist >= 3) baseOpacity = 0.55;
+
+              const opacityStyle = isCurrentDragged ? 0.4 : isAnyDragging ? 0.85 : baseOpacity;
               const transformStyle = isOver ? "scale(1.03)" : "scale(1)";
+
+              let filterStyle = "none";
+              if (dist === 2) {
+                filterStyle = "grayscale(20%)";
+              } else if (dist >= 3) {
+                filterStyle = "grayscale(60%) contrast(90%)";
+              }
 
               return (
                 <g key={person.id} transform={`translate(${x}, ${y})`}>
@@ -811,6 +1073,7 @@ export default function InteractiveTreeClient({ people, unions }: InteractiveTre
                         boxShadow: shadowStyle,
                         opacity: opacityStyle,
                         transform: transformStyle,
+                        filter: filterStyle,
                         transition: "all 0.2s cubic-bezier(0.4, 0, 0.2, 1)",
                       }}
                       onClick={(e) => {
