@@ -22,6 +22,11 @@ export default function SettingsPage() {
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   
+  // FamilySearch state
+  const [fsConnected, setFsConnected] = useState(false);
+  const [fsChecking, setFsChecking] = useState(true);
+  const [fsDisconnecting, setFsDisconnecting] = useState(false);
+
   // Page states
   const [loading, setLoading] = useState(true);
   const [profileSubmitting, setProfileSubmitting] = useState(false);
@@ -31,7 +36,43 @@ export default function SettingsPage() {
 
   useEffect(() => {
     fetchProfile();
+    fetchFamilySearchStatus();
   }, []);
+
+  const fetchFamilySearchStatus = async () => {
+    try {
+      const response = await fetch("/api/auth/familysearch/status");
+      if (response.ok) {
+        const data = await response.json();
+        setFsConnected(data.connected);
+      }
+    } catch (err) {
+      console.error("Error fetching FamilySearch status:", err);
+    } finally {
+      setFsChecking(false);
+    }
+  };
+
+  const handleFsDisconnect = async () => {
+    if (!confirm("Voulez-vous vraiment déconnecter votre compte FamilySearch ?")) {
+      return;
+    }
+    setFsDisconnecting(true);
+    try {
+      const response = await fetch("/api/auth/familysearch/disconnect", { method: "POST" });
+      if (response.ok) {
+        setFsConnected(false);
+        setProfileMessage({ text: "Compte FamilySearch déconnecté avec succès.", type: "success" });
+      } else {
+        setProfileMessage({ text: "Erreur lors de la déconnexion de FamilySearch.", type: "error" });
+      }
+    } catch (err) {
+      console.error(err);
+      setProfileMessage({ text: "Erreur réseau de déconnexion.", type: "error" });
+    } finally {
+      setFsDisconnecting(false);
+    }
+  };
 
   const fetchProfile = async () => {
     try {
@@ -251,6 +292,92 @@ export default function SettingsPage() {
               </button>
             </div>
           </form>
+        </div>
+
+        {/* FamilySearch Connection Card */}
+        <div className="card glass" style={{ padding: "2rem" }}>
+          <h2
+            className="title-font"
+            style={{
+              fontSize: "1.4rem",
+              fontWeight: 700,
+              color: "var(--accent-gold)",
+              marginBottom: "1.5rem",
+              borderBottom: "1px solid var(--border-subtle)",
+              paddingBottom: "0.75rem",
+              display: "flex",
+              alignItems: "center",
+              gap: "0.5rem"
+            }}
+          >
+            🌍 Intégration FamilySearch
+          </h2>
+
+          <p style={{ color: "var(--text-secondary)", fontSize: "0.95rem", marginBottom: "1.5rem" }}>
+            Liez votre compte FamilySearch pour rechercher directement des actes généalogiques officiels internationaux et importer des profils d'ancêtres complets dans votre arbre local en un seul clic.
+          </p>
+
+          {fsChecking ? (
+            <div style={{ color: "var(--text-muted)", fontSize: "0.9rem", fontStyle: "italic" }}>
+              ⏳ Vérification du statut de connexion...
+            </div>
+          ) : fsConnected ? (
+            <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
+              <div
+                style={{
+                  background: "rgba(16, 185, 129, 0.15)",
+                  border: "1px solid rgba(16, 185, 129, 0.3)",
+                  color: "hsl(142, 70%, 75%)",
+                  borderRadius: "8px",
+                  padding: "0.75rem 1rem",
+                  fontSize: "0.95rem",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "0.5rem"
+                }}
+              >
+                <span>✅</span>
+                <strong>Votre compte est actuellement connecté à FamilySearch.</strong>
+              </div>
+              <p style={{ fontSize: "0.85rem", color: "var(--text-muted)" }}>
+                Vous pouvez dès à présent utiliser l'onglet de recherche FamilySearch sur n'importe quel profil d'ancêtre de votre arbre.
+              </p>
+              <div style={{ display: "flex", justifyContent: "flex-start", marginTop: "0.5rem" }}>
+                <button
+                  onClick={handleFsDisconnect}
+                  className="btn btn-secondary"
+                  style={{ borderColor: "rgba(239, 68, 68, 0.3)", color: "hsl(0, 85%, 75%)" }}
+                  disabled={fsDisconnecting}
+                >
+                  {fsDisconnecting ? "Déconnexion..." : "🔴 Déconnecter mon compte"}
+                </button>
+              </div>
+            </div>
+          ) : (
+            <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
+              <div
+                style={{
+                  background: "rgba(255, 255, 255, 0.02)",
+                  border: "1px dashed var(--border-subtle)",
+                  borderRadius: "8px",
+                  padding: "1rem",
+                  fontSize: "0.9rem",
+                  color: "var(--text-secondary)"
+                }}
+              >
+                ℹ️ Non connecté. Pour activer la recherche directe, cliquez sur le bouton ci-dessous. Vous serez redirigé vers l'interface de connexion sécurisée de FamilySearch.
+              </div>
+              <div style={{ display: "flex", justifyContent: "flex-start", marginTop: "0.5rem" }}>
+                <a
+                  href="/api/auth/familysearch/login"
+                  className="btn btn-primary"
+                  style={{ textDecoration: "none" }}
+                >
+                  🔗 Connecter mon compte FamilySearch
+                </a>
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Password Card */}

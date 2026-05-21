@@ -9,8 +9,8 @@ export interface PersonForConsistency {
   deathDate: string | null;
   fatherId: string | null;
   motherId: string | null;
-  father?: { id: string; firstName: string; lastName: string; birthDate: string | null; deathDate: string | null } | null;
-  mother?: { id: string; firstName: string; lastName: string; birthDate: string | null; deathDate: string | null } | null;
+  father?: { id: string; firstName: string; lastName: string; gender?: string; birthDate: string | null; deathDate: string | null } | null;
+  mother?: { id: string; firstName: string; lastName: string; gender?: string; birthDate: string | null; deathDate: string | null } | null;
 }
 
 export interface UnionForConsistency {
@@ -62,15 +62,80 @@ export function checkPersonConsistency(
     }
   }
 
+  // 1b. Longevity checks
+  if (parsedBirth.year) {
+    const currentYear = new Date().getFullYear();
+    if (person.deathDate && parsedDeath.year) {
+      const longevity = parsedDeath.year - parsedBirth.year;
+      if (longevity > 150) {
+        warnings.push({
+          type: "LONGEVITY_ERROR",
+          message: `L'individu a vécu plus de 150 ans (${longevity} ans).`,
+          severity: "error"
+        });
+      } else if (longevity > 120) {
+        warnings.push({
+          type: "LONGEVITY_WARNING",
+          message: `L'individu a vécu plus de 120 ans (${longevity} ans).`,
+          severity: "warning"
+        });
+      }
+    } else {
+      // Still alive (no death date registered)
+      const longevity = currentYear - parsedBirth.year;
+      if (longevity > 150) {
+        warnings.push({
+          type: "ALIVE_LONGEVITY_ERROR",
+          message: `L'individu est toujours marqué vivant mais aurait plus de 150 ans (${longevity} ans) aujourd'hui.`,
+          severity: "error"
+        });
+      } else if (longevity > 120) {
+        warnings.push({
+          type: "ALIVE_LONGEVITY_WARNING",
+          message: `L'individu est toujours marqué vivant mais aurait plus de 120 ans (${longevity} ans) aujourd'hui.`,
+          severity: "warning"
+        });
+      }
+    }
+  }
+
+  // 1c. Gender inconsistencies
+  if (person.father && person.father.gender === "F") {
+    warnings.push({
+      type: "FATHER_GENDER_INVALID",
+      message: `Le père (${person.father.firstName} ${person.father.lastName}) est enregistré avec un genre féminin.`,
+      severity: "error"
+    });
+  }
+  if (person.mother && person.mother.gender === "M") {
+    warnings.push({
+      type: "MOTHER_GENDER_INVALID",
+      message: `La mère (${person.mother.firstName} ${person.mother.lastName}) est enregistrée avec un genre masculin.`,
+      severity: "error"
+    });
+  }
+
   // 2. Father age at birth
   if (person.father && person.birthDate && person.father.birthDate) {
     const parsedFatherBirth = parseDate(person.father.birthDate);
     if (parsedBirth.year && parsedFatherBirth.year) {
       const fatherAge = parsedBirth.year - parsedFatherBirth.year;
-      if (fatherAge < 12) {
+      if (compareDates(person.father.birthDate, person.birthDate) > 0) {
+        warnings.push({
+          type: "CHILD_BORN_BEFORE_PARENT",
+          message: `L'individu est né avant son père (${person.father.firstName} ${person.father.lastName}).`,
+          severity: "error"
+        });
+      } else if (fatherAge < 10) {
         warnings.push({
           type: "PARENT_TOO_YOUNG_AT_BIRTH",
-          message: `Le père (${person.father.firstName} ${person.father.lastName}) avait moins de 12 ans (${fatherAge} ans) à la naissance de cet individu.`,
+          message: `Le père (${person.father.firstName} ${person.father.lastName}) avait moins de 10 ans (${fatherAge} ans) à la naissance de cet individu.`,
+          severity: "error"
+        });
+      } else if (fatherAge < 13) {
+        warnings.push({
+          type: "PARENT_TOO_YOUNG_AT_BIRTH",
+          message: `Le père (${person.father.firstName} ${person.father.lastName}) avait moins de 13 ans (${fatherAge} ans) à la naissance de cet individu.`,
           severity: "warning"
         });
       } else if (fatherAge > 80) {
@@ -88,10 +153,22 @@ export function checkPersonConsistency(
     const parsedMotherBirth = parseDate(person.mother.birthDate);
     if (parsedBirth.year && parsedMotherBirth.year) {
       const motherAge = parsedBirth.year - parsedMotherBirth.year;
-      if (motherAge < 12) {
+      if (compareDates(person.mother.birthDate, person.birthDate) > 0) {
+        warnings.push({
+          type: "CHILD_BORN_BEFORE_PARENT",
+          message: `L'individu est né avant sa mère (${person.mother.firstName} ${person.mother.lastName}).`,
+          severity: "error"
+        });
+      } else if (motherAge < 10) {
         warnings.push({
           type: "PARENT_TOO_YOUNG_AT_BIRTH",
-          message: `La mère (${person.mother.firstName} ${person.mother.lastName}) avait moins de 12 ans (${motherAge} ans) à la naissance de cet individu.`,
+          message: `La mère (${person.mother.firstName} ${person.mother.lastName}) avait moins de 10 ans (${motherAge} ans) à la naissance de cet individu.`,
+          severity: "error"
+        });
+      } else if (motherAge < 13) {
+        warnings.push({
+          type: "PARENT_TOO_YOUNG_AT_BIRTH",
+          message: `La mère (${person.mother.firstName} ${person.mother.lastName}) avait moins de 13 ans (${motherAge} ans) à la naissance de cet individu.`,
           severity: "warning"
         });
       } else if (motherAge > 60) {
@@ -180,6 +257,52 @@ export function checkPersonConsistency(
         });
       }
     }
+  }
+
+  // 6. Checks on children relative to this person
+  if (person.birthDate && children && children.length > 0) {
+    children.forEach(c => {
+      if (c.birthDate) {
+        const parsedChildBirth = parseDate(c.birthDate);
+        if (parsedBirth.year && parsedChildBirth.year) {
+          const parentAgeAtChildBirth = parsedChildBirth.year - parsedBirth.year;
+          if (compareDates(c.birthDate, person.birthDate) < 0) {
+            warnings.push({
+              type: "CHILD_BORN_BEFORE_PARENT",
+              message: `L'enfant (${c.firstName} ${c.lastName}) est né avant cet individu.`,
+              severity: "error"
+            });
+          } else if (parentAgeAtChildBirth < 10) {
+            warnings.push({
+              type: "CHILD_PARENT_TOO_YOUNG",
+              message: `Cet individu avait moins de 10 ans (${parentAgeAtChildBirth} ans) à la naissance de son enfant (${c.firstName} ${c.lastName}).`,
+              severity: "error"
+            });
+          } else if (parentAgeAtChildBirth < 13) {
+            warnings.push({
+              type: "CHILD_PARENT_TOO_YOUNG",
+              message: `Cet individu avait moins de 13 ans (${parentAgeAtChildBirth} ans) à la naissance de son enfant (${c.firstName} ${c.lastName}).`,
+              severity: "warning"
+            });
+          } else {
+            // Check too old for parent
+            if (person.gender === "M" && parentAgeAtChildBirth > 80) {
+              warnings.push({
+                type: "CHILD_PARENT_TOO_OLD",
+                message: `Cet individu avait plus de 80 ans (${parentAgeAtChildBirth} ans) à la naissance de son enfant (${c.firstName} ${c.lastName}).`,
+                severity: "warning"
+              });
+            } else if (person.gender === "F" && parentAgeAtChildBirth > 60) {
+              warnings.push({
+                type: "CHILD_PARENT_TOO_OLD",
+                message: `Cet individu avait plus de 60 ans (${parentAgeAtChildBirth} ans) à la naissance de son enfant (${c.firstName} ${c.lastName}).`,
+                severity: "warning"
+              });
+            }
+          }
+        }
+      }
+    });
   }
 
   return warnings;
