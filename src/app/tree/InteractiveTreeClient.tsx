@@ -443,7 +443,9 @@ export default function InteractiveTreeClient({ people, unions }: InteractiveTre
         }
       };
       
-      buildPedigree(focusPerson.id, 0, 300, 320);
+      const leafGap = 110; // Écart vertical minimal entre deux cartes à la dernière génération
+      const totalSpan = leafGap * Math.pow(2, Math.max(0, maxGenerations - 2));
+      buildPedigree(focusPerson.id, 0, 300, totalSpan);
     } 
     // ------------------------------------------
     // 2. LAYOUT : ARBRE DE DESCENDANCE
@@ -488,150 +490,259 @@ export default function InteractiveTreeClient({ people, unions }: InteractiveTre
       buildDescendants(focusPerson.id, 0, 400, 800);
     } 
     // ------------------------------------------
-    // 3. LAYOUT : VUE RELATIVE (FOCUS INDIVIDU)
+    // 3. LAYOUT : VUE RELATIVE INFINIE (VUE FAMILLE)
     // ------------------------------------------
     else {
       // Centre de la vue
       const centerX = 350;
       const centerY = 250;
+      const gHeight = 185; // Distance verticale entre générations
+      const xSpacing = 260; // Distance horizontale entre cartes
       
-      // A. L'individu ciblé (Focus)
-      nodes.push({ person: focusPerson, x: centerX, y: centerY, generation: 0 });
+      // Parcours en largeur (BFS) non orienté pour attribuer une génération à chaque personne connectée
+      const relativeGen = new Map<string, number>();
+      relativeGen.set(focusPerson.id, 0);
+      const queue: string[] = [focusPerson.id];
+      const visited = new Set<string>();
       
-      // B. Ses parents au-dessus
-      if (focusPerson.fatherId) {
-        const father = people.find(p => p.id === focusPerson.fatherId);
-        if (father) {
-          const fX = centerX - 130;
-          const fY = centerY - 150;
-          nodes.push({ person: father, x: fX, y: fY, generation: -1 });
-          links.push({ 
-            fromX: fX + CARD_WIDTH / 2, 
-            fromY: fY + CARD_HEIGHT, 
-            toX: centerX + CARD_WIDTH / 3, 
-            toY: centerY, 
-            color: "rgba(59, 130, 246, 0.4)",
-            fromPersonId: father.id,
-            toPersonId: focusPerson.id,
-          });
+      while (queue.length > 0) {
+        const currentId = queue.shift()!;
+        if (visited.has(currentId)) continue;
+        visited.add(currentId);
+        
+        const currentGen = relativeGen.get(currentId)!;
+        const currentPerson = people.find(p => p.id === currentId);
+        if (!currentPerson) continue;
+        
+        // A. Parents: gen = currentGen - 1
+        if (currentPerson.fatherId) {
+          if (!relativeGen.has(currentPerson.fatherId)) {
+            relativeGen.set(currentPerson.fatherId, currentGen - 1);
+            queue.push(currentPerson.fatherId);
+          }
         }
-      } else {
-        const fX = centerX - 130;
-        const fY = centerY - 150;
+        if (currentPerson.motherId) {
+          if (!relativeGen.has(currentPerson.motherId)) {
+            relativeGen.set(currentPerson.motherId, currentGen - 1);
+            queue.push(currentPerson.motherId);
+          }
+        }
+        
+        // B. Enfants: gen = currentGen + 1
+        const children = people.filter(p => p.fatherId === currentId || p.motherId === currentId);
+        children.forEach(child => {
+          if (!relativeGen.has(child.id)) {
+            relativeGen.set(child.id, currentGen + 1);
+            queue.push(child.id);
+          }
+        });
+        
+        // C. Conjoints: gen = currentGen
+        const partnerUnions = unions.filter(u => u.partner1Id === currentId || u.partner2Id === currentId);
+        partnerUnions.forEach(u => {
+          const spouseId = u.partner1Id === currentId ? u.partner2Id : u.partner1Id;
+          if (!relativeGen.has(spouseId)) {
+            relativeGen.set(spouseId, currentGen);
+            queue.push(spouseId);
+          }
+        });
+        
+        // D. Fratrie: gen = currentGen
+        const siblings = people.filter(p => 
+          p.id !== currentId && 
+          ((currentPerson.fatherId && p.fatherId === currentPerson.fatherId) || 
+           (currentPerson.motherId && p.motherId === currentPerson.motherId))
+        );
+        siblings.forEach(sib => {
+          if (!relativeGen.has(sib.id)) {
+            relativeGen.set(sib.id, currentGen);
+            queue.push(sib.id);
+          }
+        });
+      }
+      
+      // Grouper les personnes par génération
+      const peopleByGen: { [gen: number]: string[] } = {};
+      relativeGen.forEach((gen, personId) => {
+        if (!peopleByGen[gen]) {
+          peopleByGen[gen] = [];
+        }
+        peopleByGen[gen].push(personId);
+      });
+      
+      // Trier chaque rangée pour optimiser l'affichage
+      const orderedPeopleAtGen: { [gen: number]: string[] } = {};
+      Object.keys(peopleByGen).forEach(genStr => {
+        const gen = parseInt(genStr);
+        const list = peopleByGen[gen];
+        
+        if (gen === 0) {
+          // Tri spécial pour la génération 0 (sujet principal au centre, conjoints à droite, fratrie à gauche)
+          const myUnions = unions.filter(u => u.partner1Id === focusPerson.id || u.partner2Id === focusPerson.id);
+          const spouses = myUnions.map(u => u.partner1Id === focusPerson.id ? u.partner2Id : u.partner1Id)
+                                  .filter(id => list.includes(id));
+          const siblings = people.filter(p => 
+            p.id !== focusPerson.id && 
+            ((focusPerson.fatherId && p.fatherId === focusPerson.fatherId) || 
+             (focusPerson.motherId && p.motherId === focusPerson.motherId))
+          ).map(p => p.id).filter(id => list.includes(id));
+          
+          const coreSet = new Set([focusPerson.id, ...spouses, ...siblings]);
+          const others = list.filter(id => !coreSet.has(id));
+          
+          orderedPeopleAtGen[gen] = [...siblings, focusPerson.id, ...spouses, ...others];
+        } else {
+          // Pour les autres générations, l'ordre de découverte BFS est déjà excellent
+          orderedPeopleAtGen[gen] = list;
+        }
+      });
+      
+      // Map de stockage des coordonnées calculées
+      const personCoords = new Map<string, { x: number; y: number }>();
+      
+      // Calcul des coordonnées de tous les nœuds
+      Object.keys(orderedPeopleAtGen).forEach(genStr => {
+        const gen = parseInt(genStr);
+        const list = orderedPeopleAtGen[gen];
+        const N = list.length;
+        
+        list.forEach((personId, i) => {
+          const person = people.find(p => p.id === personId);
+          if (!person) return;
+          
+          const x = centerX + (i - (N - 1) / 2) * xSpacing;
+          const y = centerY + gen * gHeight;
+          
+          nodes.push({ person, x, y, generation: gen });
+          personCoords.set(personId, { x, y });
+        });
+      });
+      
+      // Coordonnées du sujet focalisé pour le positionnement des placeholders
+      const focusCoords = personCoords.get(focusPerson.id) || { x: centerX, y: centerY };
+      const focusX = focusCoords.x;
+      const focusY = focusCoords.y;
+      
+      // Positionner les placeholders interactifs autour du focusPerson uniquement
+      // A. Père fantôme
+      if (!focusPerson.fatherId) {
+        const fX = focusX - 130;
+        const fY = focusY - 160;
         placeholders.push({ type: "father", targetPersonId: focusPerson.id, x: fX, y: fY });
         links.push({ 
           fromX: fX + CARD_WIDTH / 2, 
           fromY: fY + CARD_HEIGHT, 
-          toX: centerX + CARD_WIDTH / 3, 
-          toY: centerY, 
+          toX: focusX + CARD_WIDTH / 3, 
+          toY: focusY, 
           color: "rgba(59, 130, 246, 0.12)",
-          toPersonId: focusPerson.id,
+          fromPersonId: focusPerson.id,
         });
       }
       
-      if (focusPerson.motherId) {
-        const mother = people.find(p => p.id === focusPerson.motherId);
-        if (mother) {
-          const mX = centerX + 130;
-          const mY = centerY - 150;
-          nodes.push({ person: mother, x: mX, y: mY, generation: -1 });
-          links.push({ 
-            fromX: mX + CARD_WIDTH / 2, 
-            fromY: mY + CARD_HEIGHT, 
-            toX: centerX + (CARD_WIDTH * 2) / 3, 
-            toY: centerY, 
-            color: "rgba(236, 72, 153, 0.4)",
-            fromPersonId: mother.id,
-            toPersonId: focusPerson.id,
-          });
-        }
-      } else {
-        const mX = centerX + 130;
-        const mY = centerY - 150;
+      // B. Mère fantôme
+      if (!focusPerson.motherId) {
+        const mX = focusX + 130;
+        const mY = focusY - 160;
         placeholders.push({ type: "mother", targetPersonId: focusPerson.id, x: mX, y: mY });
         links.push({ 
           fromX: mX + CARD_WIDTH / 2, 
           fromY: mY + CARD_HEIGHT, 
-          toX: centerX + (CARD_WIDTH * 2) / 3, 
-          toY: centerY, 
+          toX: focusX + (CARD_WIDTH * 2) / 3, 
+          toY: focusY, 
           color: "rgba(236, 72, 153, 0.12)",
-          toPersonId: focusPerson.id,
+          fromPersonId: focusPerson.id,
         });
       }
       
-      // C. Ses conjoints à côté (droite)
+      // C. Conjoint fantôme
       const myUnions = unions.filter(u => u.partner1Id === focusPerson.id || u.partner2Id === focusPerson.id);
-      myUnions.forEach((u, idx) => {
-        const partnerId = u.partner1Id === focusPerson.id ? u.partner2Id : u.partner1Id;
-        const partner = people.find(p => p.id === partnerId);
-        if (partner) {
-          const pX = centerX + 260 * (idx + 1);
-          const pY = centerY;
-          nodes.push({ person: partner, x: pX, y: pY, generation: 0 });
-          // Lien de mariage (or)
-          links.push({
-            fromX: centerX + CARD_WIDTH,
-            fromY: centerY + CARD_HEIGHT / 2,
-            toX: pX,
-            toY: pY + CARD_HEIGHT / 2,
-            color: "var(--accent-gold)",
-            fromPersonId: focusPerson.id,
-            toPersonId: partner.id,
-          });
-        }
-      });
-      
-      // Toujours ajouter un placeholder conjoint à côté du dernier conjoint (ou du focus)
-      const spX = centerX + 260 * (myUnions.length + 1);
-      placeholders.push({ type: "spouse", targetPersonId: focusPerson.id, x: spX, y: centerY });
+      const lastSpouseX = focusX + myUnions.length * xSpacing;
+      const spX = lastSpouseX + xSpacing;
+      placeholders.push({ type: "spouse", targetPersonId: focusPerson.id, x: spX, y: focusY });
       links.push({
-        fromX: centerX + CARD_WIDTH,
-        fromY: centerY + CARD_HEIGHT / 2,
+        fromX: focusX + CARD_WIDTH,
+        fromY: focusY + CARD_HEIGHT / 2,
         toX: spX,
-        toY: centerY + CARD_HEIGHT / 2,
+        toY: focusY + CARD_HEIGHT / 2,
         color: "rgba(212, 175, 55, 0.15)",
         fromPersonId: focusPerson.id,
       });
       
-      // D. Ses enfants au-dessous
-      const myChildren = people.filter(p => p.fatherId === focusPerson.id || p.motherId === focusPerson.id);
-      const chOffset = 250;
-      myChildren.forEach((c, idx) => {
-        const cX = centerX + (idx - (myChildren.length - 1) / 2) * chOffset;
-        const cY = centerY + 160;
-        nodes.push({ person: c, x: cX, y: cY, generation: 1 });
-        // Lien focus -> enfant
-        links.push({
-          fromX: centerX + CARD_WIDTH / 2,
-          fromY: centerY + CARD_HEIGHT,
-          toX: cX + CARD_WIDTH / 2,
-          toY: cY,
-          color: c.gender === "M" ? "rgba(59, 130, 246, 0.3)" : "rgba(236, 72, 153, 0.3)",
-          fromPersonId: focusPerson.id,
-          toPersonId: c.id,
-        });
+      // Générer les liaisons parent-enfant
+      nodes.forEach(({ person, x, y }) => {
+        if (person.fatherId) {
+          const fatherCoords = personCoords.get(person.fatherId);
+          if (fatherCoords) {
+            links.push({
+              fromX: fatherCoords.x + CARD_WIDTH / 2,
+              fromY: fatherCoords.y + CARD_HEIGHT,
+              toX: x + CARD_WIDTH / 2,
+              toY: y,
+              color: person.gender === "M" ? "rgba(59, 130, 246, 0.3)" : "rgba(236, 72, 153, 0.3)",
+              fromPersonId: person.fatherId,
+              toPersonId: person.id,
+            });
+          }
+        }
+        if (person.motherId) {
+          const motherCoords = personCoords.get(person.motherId);
+          if (motherCoords) {
+            links.push({
+              fromX: motherCoords.x + CARD_WIDTH / 2,
+              fromY: motherCoords.y + CARD_HEIGHT,
+              toX: x + CARD_WIDTH / 2,
+              toY: y,
+              color: person.gender === "M" ? "rgba(59, 130, 246, 0.3)" : "rgba(236, 72, 153, 0.3)",
+              fromPersonId: person.motherId,
+              toPersonId: person.id,
+            });
+          }
+        }
       });
       
-      // E. Ses frères et sœurs (fratrie) à gauche
-      const siblings = people.filter(p => 
-        p.id !== focusPerson.id && 
-        ((focusPerson.fatherId && p.fatherId === focusPerson.fatherId) || 
-         (focusPerson.motherId && p.motherId === focusPerson.motherId))
-      );
-      siblings.forEach((s, idx) => {
-        const sX = centerX - 260;
-        const sY = centerY + (idx - (siblings.length - 1) / 2) * 110;
-        nodes.push({ person: s, x: sX, y: sY, generation: 0 });
-        // Lien vers le focus (gris discret)
-        links.push({
-          fromX: sX + CARD_WIDTH,
-          fromY: sY + CARD_HEIGHT / 2,
-          toX: centerX,
-          toY: centerY + CARD_HEIGHT / 2,
-          color: "rgba(255,255,255,0.12)",
-          fromPersonId: s.id,
-          toPersonId: focusPerson.id,
-        });
+      // Générer les liaisons de mariage
+      unions.forEach(u => {
+        const coords1 = personCoords.get(u.partner1Id);
+        const coords2 = personCoords.get(u.partner2Id);
+        if (coords1 && coords2) {
+          const leftCoords = coords1.x < coords2.x ? coords1 : coords2;
+          const rightCoords = coords1.x < coords2.x ? coords2 : coords1;
+          const leftId = coords1.x < coords2.x ? u.partner1Id : u.partner2Id;
+          const rightId = coords1.x < coords2.x ? u.partner2Id : u.partner1Id;
+          
+          links.push({
+            fromX: leftCoords.x + CARD_WIDTH,
+            fromY: leftCoords.y + CARD_HEIGHT / 2,
+            toX: rightCoords.x,
+            toY: rightCoords.y + CARD_HEIGHT / 2,
+            color: "var(--accent-gold)",
+            fromPersonId: leftId,
+            toPersonId: rightId,
+          });
+        }
+      });
+      
+      // Générer les liaisons de fratrie directes très discrètes pour la génération 0
+      orderedPeopleAtGen[0]?.forEach(personId => {
+        if (personId !== focusPerson.id) {
+          const sibling = people.find(p => p.id === personId);
+          if (sibling && 
+              ((focusPerson.fatherId && sibling.fatherId === focusPerson.fatherId) || 
+               (focusPerson.motherId && sibling.motherId === focusPerson.motherId))) {
+            const siblingCoords = personCoords.get(sibling.id);
+            if (siblingCoords) {
+              links.push({
+                fromX: siblingCoords.x + (siblingCoords.x < focusX ? CARD_WIDTH : 0),
+                fromY: siblingCoords.y + CARD_HEIGHT / 2,
+                toX: focusX + (siblingCoords.x < focusX ? 0 : CARD_WIDTH),
+                toY: focusY + CARD_HEIGHT / 2,
+                color: "rgba(255, 255, 255, 0.08)",
+                fromPersonId: sibling.id,
+                toPersonId: focusPerson.id,
+              });
+            }
+          }
+        }
       });
     }
   }
@@ -807,7 +918,7 @@ export default function InteractiveTreeClient({ people, unions }: InteractiveTre
             <input 
               type="range" 
               min="3" 
-              max="6" 
+              max="10" 
               value={maxGenerations} 
               onChange={(e) => setMaxGenerations(parseInt(e.target.value))}
               style={{ accentColor: "var(--accent-emerald)", cursor: "pointer", width: "100%" }}
