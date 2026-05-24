@@ -15,7 +15,7 @@ export async function PUT(request: Request, { params }: RouteParams) {
     }
 
     const { id } = await params;
-    const { name, description } = await request.json();
+    const { name, description, userPersonId } = await request.json();
 
     if (!name) {
       return NextResponse.json({ error: "Le nom de l'arbre est requis." }, { status: 400 });
@@ -32,6 +32,7 @@ export async function PUT(request: Request, { params }: RouteParams) {
       data: {
         name,
         description: description || null,
+        userPersonId: userPersonId || null,
       },
     });
 

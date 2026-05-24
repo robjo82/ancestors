@@ -49,7 +49,13 @@ export async function getCurrentUser() {
     if (!decoded || !decoded.userId) return null;
     const user = await prisma.user.findUnique({
       where: { id: decoded.userId },
-      select: { id: true, email: true, name: true }
+      select: {
+        id: true,
+        email: true,
+        name: true,
+        emailAnniversaries: true,
+        emailNameDays: true,
+      }
     });
     return user;
   } catch (e) {

@@ -7,6 +7,20 @@ interface UserProfile {
   id: string;
   name: string | null;
   email: string;
+  emailAnniversaries: boolean;
+  emailNameDays: boolean;
+}
+
+interface ActiveTree {
+  id: string;
+  name: string;
+  userPersonId: string | null;
+}
+
+interface PersonBrief {
+  id: string;
+  firstName: string;
+  lastName: string;
 }
 
 export default function SettingsPage() {
@@ -16,6 +30,15 @@ export default function SettingsPage() {
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
+  
+  // Active Tree and People states
+  const [activeTree, setActiveTree] = useState<ActiveTree | null>(null);
+  const [people, setPeople] = useState<PersonBrief[]>([]);
+  const [userPersonId, setUserPersonId] = useState<string>("");
+
+  // Notification preferences states
+  const [emailAnniversaries, setEmailAnniversaries] = useState(false);
+  const [emailNameDays, setEmailNameDays] = useState(false);
   
   // Security state
   const [currentPassword, setCurrentPassword] = useState("");
@@ -33,6 +56,8 @@ export default function SettingsPage() {
   const [passwordSubmitting, setPasswordSubmitting] = useState(false);
   const [profileMessage, setProfileMessage] = useState({ text: "", type: "" }); // type: 'success' | 'error'
   const [passwordMessage, setPasswordMessage] = useState({ text: "", type: "" }); // type: 'success' | 'error'
+  const [notifSubmitting, setNotifSubmitting] = useState(false);
+  const [notifMessage, setNotifMessage] = useState({ text: "", type: "" }); // type: 'success' | 'error'
 
   // Feature Request state
   const [featureTitle, setFeatureTitle] = useState("");
@@ -90,6 +115,16 @@ export default function SettingsPage() {
           setProfile(data.user);
           setName(data.user.name || "");
           setEmail(data.user.email || "");
+          setEmailAnniversaries(data.user.emailAnniversaries || false);
+          setEmailNameDays(data.user.emailNameDays || false);
+          
+          if (data.activeTree) {
+            setActiveTree(data.activeTree);
+            setUserPersonId(data.activeTree.userPersonId || "");
+          }
+          if (data.people) {
+            setPeople(data.people);
+          }
         } else {
           router.push("/login");
         }
@@ -223,6 +258,60 @@ export default function SettingsPage() {
       setFeatureMessage({ text: "Erreur de connexion avec le serveur.", type: "error" });
     } finally {
       setFeatureSubmitting(false);
+    }
+  };
+
+  const handleUpdateNotificationsAndIdentity = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setNotifMessage({ text: "", type: "" });
+    setNotifSubmitting(true);
+
+    try {
+      // 1. Update user profile notification preferences
+      const userRes = await fetch("/api/auth/update-profile", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          emailAnniversaries,
+          emailNameDays,
+        }),
+      });
+
+      const userData = await userRes.json();
+      if (!userRes.ok) {
+        setNotifMessage({ text: userData.error || "Erreur lors de la mise à jour des préférences.", type: "error" });
+        setNotifSubmitting(false);
+        return;
+      }
+
+      // 2. If an active tree is present, update the userPersonId in active tree settings
+      if (activeTree) {
+        const treeRes = await fetch(`/api/trees/${activeTree.id}`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            name: activeTree.name, // required by PUT
+            userPersonId: userPersonId || null,
+          }),
+        });
+
+        const treeData = await treeRes.json();
+        if (!treeRes.ok) {
+          setNotifMessage({ text: treeData.error || "Erreur lors de l'association de votre identité dans l'arbre.", type: "error" });
+          setNotifSubmitting(false);
+          return;
+        }
+
+        // Update active tree local state
+        setActiveTree({ ...activeTree, userPersonId: treeData.userPersonId });
+      }
+
+      setNotifMessage({ text: "Vos préférences de notification et votre identité ont été mises à jour avec succès !", type: "success" });
+    } catch (err) {
+      console.error(err);
+      setNotifMessage({ text: "Erreur réseau lors de la mise à jour des paramètres.", type: "error" });
+    } finally {
+      setNotifSubmitting(false);
     }
   };
 
@@ -428,6 +517,164 @@ export default function SettingsPage() {
               </div>
             </div>
           )}
+        </div>
+
+        {/* Notifications & Identité Card */}
+        <div className="card glass" style={{ padding: "2rem" }}>
+          <h2
+            className="title-font"
+            style={{
+              fontSize: "1.4rem",
+              fontWeight: 700,
+              color: "var(--accent-gold)",
+              marginBottom: "1.5rem",
+              borderBottom: "1px solid var(--border-subtle)",
+              paddingBottom: "0.75rem",
+              display: "flex",
+              alignItems: "center",
+              gap: "0.5rem"
+            }}
+          >
+            🔔 Notifications & Identité
+          </h2>
+
+          <p style={{ color: "var(--text-secondary)", fontSize: "0.95rem", marginBottom: "1.5rem" }}>
+            Configurez vos préférences d'alertes email et reliez votre compte utilisateur à un profil de votre arbre généalogique.
+          </p>
+
+          {notifMessage.text && (
+            <div
+              style={{
+                background: notifMessage.type === "success" ? "rgba(16, 185, 129, 0.15)" : "rgba(239, 68, 68, 0.15)",
+                border: notifMessage.type === "success" ? "1px solid rgba(16, 185, 129, 0.3)" : "1px solid rgba(239, 68, 68, 0.3)",
+                color: notifMessage.type === "success" ? "hsl(142, 70%, 75%)" : "hsl(0, 85%, 75%)",
+                borderRadius: "8px",
+                padding: "0.75rem 1rem",
+                marginBottom: "1.5rem",
+                fontSize: "0.9rem"
+              }}
+            >
+              {notifMessage.type === "success" ? "✅" : "⚠️"} {notifMessage.text}
+            </div>
+          )}
+
+          <form onSubmit={handleUpdateNotificationsAndIdentity}>
+            {/* Identity Selector */}
+            <div className="input-group" style={{ marginBottom: "2rem" }}>
+              <label className="input-label" style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                <span>👤 Qui êtes-vous dans cet arbre ?</span>
+                {activeTree && (
+                  <span style={{ fontSize: "0.75rem", color: "var(--accent-gold)", textTransform: "none" }}>
+                    Arbre actif : <strong>{activeTree.name}</strong>
+                  </span>
+                )}
+              </label>
+              <select
+                className="input-field"
+                style={{ appearance: "none", cursor: "pointer" }}
+                value={userPersonId}
+                onChange={(e) => setUserPersonId(e.target.value)}
+                disabled={notifSubmitting}
+              >
+                <option value="">-- Non désigné --</option>
+                {people.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    👤 {p.lastName.toUpperCase()} {p.firstName}
+                  </option>
+                ))}
+              </select>
+              <span style={{ fontSize: "0.8rem", color: "var(--text-muted)", marginTop: "0.35rem", display: "block" }}>
+                Associer votre compte à une personne réelle de votre arbre permet d'activer les fonctions de parenté relative et d'améliorer la personnalisation visuelle.
+              </span>
+            </div>
+
+            {/* Notification Checkboxes / Toggles */}
+            <div style={{ display: "flex", flexDirection: "column", gap: "1.25rem", marginBottom: "2rem" }}>
+              {/* Anniversary Toggle */}
+              <label
+                style={{
+                  display: "flex",
+                  alignItems: "flex-start",
+                  gap: "1rem",
+                  cursor: "pointer",
+                  background: "rgba(255, 255, 255, 0.02)",
+                  border: "1px solid var(--border-subtle)",
+                  padding: "1rem",
+                  borderRadius: "8px",
+                  transition: "var(--transition-fast)"
+                }}
+                onMouseEnter={(e) => (e.currentTarget.style.borderColor = "var(--accent-emerald)")}
+                onMouseLeave={(e) => (e.currentTarget.style.borderColor = "var(--border-subtle)")}
+              >
+                <input
+                  type="checkbox"
+                  style={{
+                    width: "20px",
+                    height: "20px",
+                    accentColor: "var(--accent-emerald)",
+                    marginTop: "0.15rem",
+                    cursor: "pointer"
+                  }}
+                  checked={emailAnniversaries}
+                  onChange={(e) => setEmailAnniversaries(e.target.checked)}
+                  disabled={notifSubmitting}
+                />
+                <div>
+                  <span style={{ fontSize: "0.95rem", fontWeight: 600, display: "block", color: "var(--text-primary)" }}>
+                    🎂 Alertes d'anniversaires (Membres vivants)
+                  </span>
+                  <span style={{ fontSize: "0.85rem", color: "var(--text-muted)", display: "block", marginTop: "0.15rem" }}>
+                    M'avertir par email exactement une semaine avant l'anniversaire de naissance de toutes les personnes vivantes de mon arbre.
+                  </span>
+                </div>
+              </label>
+
+              {/* Name Day Toggle */}
+              <label
+                style={{
+                  display: "flex",
+                  alignItems: "flex-start",
+                  gap: "1rem",
+                  cursor: "pointer",
+                  background: "rgba(255, 255, 255, 0.02)",
+                  border: "1px solid var(--border-subtle)",
+                  padding: "1rem",
+                  borderRadius: "8px",
+                  transition: "var(--transition-fast)"
+                }}
+                onMouseEnter={(e) => (e.currentTarget.style.borderColor = "var(--accent-emerald)")}
+                onMouseLeave={(e) => (e.currentTarget.style.borderColor = "var(--border-subtle)")}
+              >
+                <input
+                  type="checkbox"
+                  style={{
+                    width: "20px",
+                    height: "20px",
+                    accentColor: "var(--accent-emerald)",
+                    marginTop: "0.15rem",
+                    cursor: "pointer"
+                  }}
+                  checked={emailNameDays}
+                  onChange={(e) => setEmailNameDays(e.target.checked)}
+                  disabled={notifSubmitting}
+                />
+                <div>
+                  <span style={{ fontSize: "0.95rem", fontWeight: 600, display: "block", color: "var(--text-primary)" }}>
+                    📅 Fêtes du calendrier grégorien
+                  </span>
+                  <span style={{ fontSize: "0.85rem", color: "var(--text-muted)", display: "block", marginTop: "0.15rem" }}>
+                    M'avertir le jour même par email pour célébrer la fête des membres de ma famille présents dans mon arbre.
+                  </span>
+                </div>
+              </label>
+            </div>
+
+            <div style={{ display: "flex", justifyContent: "flex-end" }}>
+              <button type="submit" className="btn btn-primary" disabled={notifSubmitting}>
+                {notifSubmitting ? "Sauvegarde..." : "Enregistrer les préférences"}
+              </button>
+            </div>
+          </form>
         </div>
 
         {/* Password Card */}

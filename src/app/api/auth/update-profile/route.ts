@@ -9,7 +9,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Non autorisé. Veuillez vous connecter." }, { status: 401 });
     }
 
-    const { name, email, currentPassword, newPassword } = await request.json();
+    const { name, email, currentPassword, newPassword, emailAnniversaries, emailNameDays } = await request.json();
 
     // Fetch the full user details to check the password and current values
     const dbUser = await prisma.user.findUnique({
@@ -20,7 +20,13 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Utilisateur non trouvé." }, { status: 404 });
     }
 
-    const updateData: { name?: string | null; email?: string; passwordHash?: string } = {};
+    const updateData: {
+      name?: string | null;
+      email?: string;
+      passwordHash?: string;
+      emailAnniversaries?: boolean;
+      emailNameDays?: boolean;
+    } = {};
 
     // 1. Update name if provided
     if (typeof name === "string") {
@@ -70,11 +76,25 @@ export async function POST(request: Request) {
       updateData.passwordHash = hashPassword(newPassword);
     }
 
+    // 4. Update notification preferences if provided
+    if (typeof emailAnniversaries === "boolean") {
+      updateData.emailAnniversaries = emailAnniversaries;
+    }
+    if (typeof emailNameDays === "boolean") {
+      updateData.emailNameDays = emailNameDays;
+    }
+
     // If no changes are needed
     if (Object.keys(updateData).length === 0) {
       return NextResponse.json({
         message: "Aucune modification détectée.",
-        user: { id: dbUser.id, email: dbUser.email, name: dbUser.name }
+        user: {
+          id: dbUser.id,
+          email: dbUser.email,
+          name: dbUser.name,
+          emailAnniversaries: dbUser.emailAnniversaries,
+          emailNameDays: dbUser.emailNameDays,
+        }
       });
     }
 
@@ -82,7 +102,13 @@ export async function POST(request: Request) {
     const updatedUser = await prisma.user.update({
       where: { id: user.id },
       data: updateData,
-      select: { id: true, email: true, name: true }
+      select: {
+        id: true,
+        email: true,
+        name: true,
+        emailAnniversaries: true,
+        emailNameDays: true,
+      }
     });
 
     return NextResponse.json({

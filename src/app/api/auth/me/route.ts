@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getCurrentUser } from "@/lib/auth";
+import { getCurrentUser, getActiveTreeIdForUser } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 
 export async function GET() {
@@ -15,9 +15,26 @@ export async function GET() {
       orderBy: { createdAt: "asc" },
     });
 
+    const activeTreeId = await getActiveTreeIdForUser(user.id);
+    const activeTree = await prisma.tree.findUnique({
+      where: { id: activeTreeId },
+      select: { id: true, name: true, userPersonId: true },
+    });
+
+    const people = await prisma.person.findMany({
+      where: { treeId: activeTreeId },
+      select: { id: true, firstName: true, lastName: true },
+      orderBy: [
+        { lastName: "asc" },
+        { firstName: "asc" },
+      ],
+    });
+
     return NextResponse.json({
       user,
       trees,
+      activeTree,
+      people,
     });
   } catch (e: any) {
     console.error("Auth me error:", e);
