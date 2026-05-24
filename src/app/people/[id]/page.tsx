@@ -11,7 +11,7 @@ export default async function PersonProfilePage({
 }) {
   const user = await getCurrentUser();
   if (!user) {
-    redirect("/login");
+    redirect("/login?clear=true");
   }
 
   const activeTreeId = await getActiveTreeIdForUser(user.id);

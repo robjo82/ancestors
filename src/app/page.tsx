@@ -42,7 +42,7 @@ async function getGenerationDepth(treeId: string): Promise<number> {
 export default async function Home() {
   const user = await getCurrentUser();
   if (!user) {
-    redirect("/login");
+    redirect("/login?clear=true");
   }
 
   const activeTreeId = await getActiveTreeIdForUser(user.id);

@@ -33,7 +33,7 @@ function extractYear(dateStr: string | null): number | null {
 export default async function StatisticsPage() {
   const user = await getCurrentUser();
   if (!user) {
-    redirect("/login");
+    redirect("/login?clear=true");
   }
 
   const activeTreeId = await getActiveTreeIdForUser(user.id);
