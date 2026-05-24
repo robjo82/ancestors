@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
+import packageJson from "../../../package.json";
 
 interface UserProfile {
   id: string;
@@ -332,6 +333,9 @@ export default function SettingsPage() {
         </h1>
         <p style={{ color: "var(--text-secondary)", marginTop: "0.25rem" }}>
           Gérez vos informations personnelles et configurez la sécurité de votre compte Ancestors.
+          <span style={{ display: "block", fontSize: "0.8rem", color: "var(--text-muted)", marginTop: "0.4rem" }}>
+            Version {packageJson.version} (Build de production)
+          </span>
         </p>
       </div>
 
