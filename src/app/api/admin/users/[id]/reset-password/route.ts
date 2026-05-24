@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getCurrentUser, hashPassword } from "@/lib/auth";
+import { getCurrentUser, hashPassword, isAdmin } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 
 export async function POST(
@@ -9,7 +9,10 @@ export async function POST(
   try {
     const adminUser = await getCurrentUser();
     if (!adminUser) {
-      return NextResponse.json({ error: "Non autorisé." }, { status: 401 });
+      return NextResponse.json({ error: "Non connecté." }, { status: 401 });
+    }
+    if (!isAdmin(adminUser.email)) {
+      return NextResponse.json({ error: "Accès interdit. Réservé aux administrateurs." }, { status: 403 });
     }
 
     const { id } = await params;

@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getCurrentUser } from "@/lib/auth";
+import { getCurrentUser, isAdmin } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 
 export async function DELETE(
@@ -9,7 +9,10 @@ export async function DELETE(
   try {
     const adminUser = await getCurrentUser();
     if (!adminUser) {
-      return NextResponse.json({ error: "Non autorisé." }, { status: 401 });
+      return NextResponse.json({ error: "Non connecté." }, { status: 401 });
+    }
+    if (!isAdmin(adminUser.email)) {
+      return NextResponse.json({ error: "Accès interdit. Réservé aux administrateurs." }, { status: 403 });
     }
 
     const { id } = await params;

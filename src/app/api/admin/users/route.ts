@@ -1,12 +1,15 @@
 import { NextResponse } from "next/server";
-import { getCurrentUser, hashPassword } from "@/lib/auth";
+import { getCurrentUser, hashPassword, isAdmin } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 
 export async function GET() {
   try {
     const adminUser = await getCurrentUser();
     if (!adminUser) {
-      return NextResponse.json({ error: "Non autorisé." }, { status: 401 });
+      return NextResponse.json({ error: "Non connecté." }, { status: 401 });
+    }
+    if (!isAdmin(adminUser.email)) {
+      return NextResponse.json({ error: "Accès interdit. Réservé aux administrateurs." }, { status: 403 });
     }
 
     // 1. Calculate global statistics across the entire SQLite database
@@ -73,7 +76,10 @@ export async function POST(request: Request) {
   try {
     const adminUser = await getCurrentUser();
     if (!adminUser) {
-      return NextResponse.json({ error: "Non autorisé." }, { status: 401 });
+      return NextResponse.json({ error: "Non connecté." }, { status: 401 });
+    }
+    if (!isAdmin(adminUser.email)) {
+      return NextResponse.json({ error: "Accès interdit. Réservé aux administrateurs." }, { status: 403 });
     }
 
     const { name, email, password } = await request.json();

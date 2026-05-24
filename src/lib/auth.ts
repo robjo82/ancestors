@@ -109,3 +109,14 @@ export async function getActiveTreeIdForUser(userId: string): Promise<string> {
   return tree.id;
 }
 
+export function isAdmin(email: string | null | undefined): boolean {
+  if (!email) return false;
+  const adminEmailsStr = process.env.ADMIN_EMAILS;
+  if (!adminEmailsStr) {
+    // In local development, if ADMIN_EMAILS is not set, allow access to ease testing
+    return process.env.NODE_ENV !== "production";
+  }
+  const adminEmails = adminEmailsStr.split(",").map(e => e.trim().toLowerCase());
+  return adminEmails.includes(email.toLowerCase());
+}
+

@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getCurrentUser } from "@/lib/auth";
+import { getCurrentUser, isAdmin } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 
 export async function PATCH(
@@ -9,7 +9,10 @@ export async function PATCH(
   try {
     const user = await getCurrentUser();
     if (!user) {
-      return NextResponse.json({ error: "Non autorisé." }, { status: 401 });
+      return NextResponse.json({ error: "Non connecté." }, { status: 401 });
+    }
+    if (!isAdmin(user.email)) {
+      return NextResponse.json({ error: "Accès interdit. Réservé aux administrateurs." }, { status: 403 });
     }
 
     const { id } = await params;
@@ -39,7 +42,10 @@ export async function DELETE(
   try {
     const user = await getCurrentUser();
     if (!user) {
-      return NextResponse.json({ error: "Non autorisé." }, { status: 401 });
+      return NextResponse.json({ error: "Non connecté." }, { status: 401 });
+    }
+    if (!isAdmin(user.email)) {
+      return NextResponse.json({ error: "Accès interdit. Réservé aux administrateurs." }, { status: 403 });
     }
 
     const { id } = await params;

@@ -334,7 +334,7 @@ export default function SettingsPage() {
         <p style={{ color: "var(--text-secondary)", marginTop: "0.25rem" }}>
           Gérez vos informations personnelles et configurez la sécurité de votre compte Ancestors.
           <span style={{ display: "block", fontSize: "0.8rem", color: "var(--text-muted)", marginTop: "0.4rem" }}>
-            Version {packageJson.version} (Build de production)
+            Version {process.env.NEXT_PUBLIC_APP_VERSION || packageJson.version} (Build de production)
           </span>
         </p>
       </div>

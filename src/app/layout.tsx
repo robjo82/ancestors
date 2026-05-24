@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import "./globals.css";
-import { getCurrentUser } from "@/lib/auth";
+import { getCurrentUser, isAdmin } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { cookies } from "next/headers";
 import NavbarClient from "./NavbarClient";
@@ -43,7 +43,7 @@ export default async function RootLayout({
   return (
     <html lang="fr">
       <body className="app-container">
-        <NavbarClient user={user} trees={trees} activeTreeId={activeTreeId} />
+        <NavbarClient user={{ ...user, isAdmin: isAdmin(user.email) }} trees={trees} activeTreeId={activeTreeId} />
 
         <main className="main-content">
           {children}

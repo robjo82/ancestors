@@ -58,7 +58,7 @@ jobs:
           docker login registry.robin-joseph.fr -u dummy -p dummy
           
           echo "Building Docker Image..."
-          docker build -t registry.robin-joseph.fr/ancestors:latest -t registry.robin-joseph.fr/ancestors:$VERSION -t registry.robin-joseph.fr/ancestors:$VERSION_NO_V .
+          docker build --build-arg NEXT_PUBLIC_APP_VERSION=$VERSION_NO_V -t registry.robin-joseph.fr/ancestors:latest -t registry.robin-joseph.fr/ancestors:$VERSION -t registry.robin-joseph.fr/ancestors:$VERSION_NO_V .
           
           echo "Pushing Docker Images..."
           docker push registry.robin-joseph.fr/ancestors:latest

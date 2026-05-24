@@ -98,6 +98,8 @@ export default function AdminPage() {
       } else {
         if (featuresRes.status === 401 || usersRes.status === 401) {
           router.push("/login");
+        } else if (featuresRes.status === 403 || usersRes.status === 403) {
+          setError("Accès interdit. Cette page est réservée aux administrateurs de la plateforme.");
         } else {
           setError("Une erreur est survenue lors du chargement des données d'administration.");
         }

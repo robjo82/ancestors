@@ -15,6 +15,8 @@ RUN npx prisma generate
 COPY . .
 
 # Désactiver le check eslint et le telemetry durant le build docker
+ARG NEXT_PUBLIC_APP_VERSION
+ENV NEXT_PUBLIC_APP_VERSION=$NEXT_PUBLIC_APP_VERSION
 ENV NEXT_TELEMETRY_DISABLED=1
 RUN npm run build
 
