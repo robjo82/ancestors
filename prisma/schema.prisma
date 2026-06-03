@@ -17,6 +17,7 @@ model User {
   updatedAt          DateTime             @updatedAt
   trees              Tree[]
   resetTokens        PasswordResetToken[]
+  familySearchConnection FamilySearchConnection?
 }
 
 model Tree {
@@ -133,3 +134,17 @@ model PasswordResetToken {
   expiresAt DateTime
   createdAt DateTime @default(now())
 }
+
+model FamilySearchConnection {
+  id            String   @id @default(uuid())
+  userId        String   @unique
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  accessToken   String
+  expiresAt     DateTime
+  fsUserId      String
+  fsUsername    String
+  fsContactName String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+}
+

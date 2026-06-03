@@ -1,18 +1,19 @@
 import { NextRequest, NextResponse } from "next/server";
 import crypto from "crypto";
 import { cookies } from "next/headers";
+import { getCurrentUser } from "@/lib/auth";
 
 export async function GET(request: NextRequest) {
   try {
-    const clientId = process.env.FAMILYSEARCH_CLIENT_ID;
-    
-    if (!clientId) {
+    const user = await getCurrentUser();
+    if (!user) {
       return NextResponse.json(
-        { error: "FamilySearch Client ID non configuré dans les variables d'environnement." },
-        { status: 500 }
+        { error: "Vous devez être connecté pour lier votre compte FamilySearch." },
+        { status: 401 }
       );
     }
 
+    const clientId = process.env.FAMILYSEARCH_CLIENT_ID || "b007E40M8PNO0BH4T1SD";
     const fsEnv = process.env.FAMILYSEARCH_ENV || "sandbox";
     const authBaseUrl = fsEnv === "production"
       ? "https://ident.familysearch.org/cis-web/oauth2/v3/authorization"

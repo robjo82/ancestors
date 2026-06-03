@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 
 export default function ImportExportPage() {
   const [file, setFile] = useState<File | null>(null);
@@ -14,6 +14,39 @@ export default function ImportExportPage() {
   } | null>(null);
 
   const [exporting, setExporting] = useState(false);
+
+  // FamilySearch states
+  const [fsConnected, setFsConnected] = useState(false);
+  const [fsChecking, setFsChecking] = useState(true);
+  const [fsContactName, setFsContactName] = useState("");
+  const [fsGenerations, setFsGenerations] = useState(4);
+  const [fsImporting, setFsImporting] = useState(false);
+  const [fsResult, setFsResult] = useState<{
+    success: boolean;
+    peopleCount?: number;
+    unionsCount?: number;
+    message?: string;
+    error?: string;
+  } | null>(null);
+
+  useEffect(() => {
+    fetchFsStatus();
+  }, []);
+
+  const fetchFsStatus = async () => {
+    try {
+      const response = await fetch("/api/auth/familysearch/status");
+      if (response.ok) {
+        const data = await response.json();
+        setFsConnected(data.connected);
+        setFsContactName(data.fsContactName || "");
+      }
+    } catch (err) {
+      console.error("Error fetching FamilySearch status on import page:", err);
+    } finally {
+      setFsChecking(false);
+    }
+  };
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files.length > 0) {
@@ -104,6 +137,45 @@ export default function ImportExportPage() {
     }
   };
 
+  const handleFsImportSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!confirm("⚠️ ATTENTION : La synchronisation avec FamilySearch va écraser TOUTES les données locales actuelles de votre arbre actif. Cette action est irréversible. Voulez-vous continuer ?")) {
+      return;
+    }
+
+    setFsImporting(true);
+    setFsResult(null);
+
+    try {
+      const response = await fetch(`/api/familysearch/import?generations=${fsGenerations}`, {
+        method: "POST"
+      });
+
+      const data = await response.json();
+      if (response.ok && data.success) {
+        setFsResult({
+          success: true,
+          peopleCount: data.peopleCount,
+          unionsCount: data.unionsCount,
+          message: data.message
+        });
+      } else {
+        setFsResult({
+          success: false,
+          error: data.error || "Une erreur est survenue lors de la synchronisation."
+        });
+      }
+    } catch (err) {
+      console.error(err);
+      setFsResult({
+        success: false,
+        error: "Impossible de joindre le serveur de synchronisation. Veuillez vérifier le conteneur."
+      });
+    } finally {
+      setFsImporting(false);
+    }
+  };
+
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "2rem", maxWidth: "900px", margin: "0 auto" }}>
       {/* En-tête */}
@@ -116,8 +188,8 @@ export default function ImportExportPage() {
         </p>
       </section>
 
-      {/* Grid deux colonnes */}
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "2rem" }}>
+      {/* Grid multi-colonnes auto-fit */}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: "2rem" }}>
         
         {/* Colonne Import */}
         <div className="card glass" style={{ display: "flex", flexDirection: "column", gap: "1.5rem" }}>
@@ -239,6 +311,120 @@ export default function ImportExportPage() {
               Format : GEDCOM 5.5.1 UTF-8. Compatible avec tous les logiciels de généalogie.
             </p>
           </div>
+        </div>
+
+        {/* Colonne FamilySearch Sync */}
+        <div className="card glass" style={{ display: "flex", flexDirection: "column", gap: "1.5rem", justifyContent: "space-between" }}>
+          <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
+            <h2 className="title-font" style={{ fontSize: "1.4rem", color: "var(--accent-emerald)", display: "flex", alignItems: "center", gap: "0.5rem" }}>
+              🌍 Synchronisation FamilySearch
+            </h2>
+            <p style={{ color: "var(--text-secondary)", fontSize: "0.9rem" }}>
+              ⚠️ **Attention :** L'importation depuis FamilySearch remplacera TOUTES les données locales actuelles de votre arbre généalogique.
+            </p>
+            
+            {fsChecking ? (
+              <p style={{ color: "var(--text-muted)", fontSize: "0.9rem", fontStyle: "italic" }}>
+                ⏳ Vérification du compte...
+              </p>
+            ) : fsConnected ? (
+              <div style={{ display: "flex", flexDirection: "column", gap: "1.25rem" }}>
+                <div style={{
+                  background: "rgba(16, 185, 129, 0.1)",
+                  border: "1px solid rgba(16, 185, 129, 0.3)",
+                  padding: "0.75rem",
+                  borderRadius: "8px",
+                  fontSize: "0.85rem",
+                  color: "hsl(142, 70%, 75%)"
+                }}>
+                  ✅ Connecté en tant que : <strong>{fsContactName}</strong>
+                </div>
+
+                <form onSubmit={handleFsImportSubmit} style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
+                  <div className="input-group">
+                    <label className="input-label" style={{ fontSize: "0.85rem" }}>Nombre de générations d'ancêtres</label>
+                    <select
+                      className="input-field"
+                      style={{ padding: "0.6rem" }}
+                      value={fsGenerations}
+                      onChange={(e) => setFsGenerations(parseInt(e.target.value, 10))}
+                      disabled={fsImporting}
+                    >
+                      <option value={2}>2 générations (parents, grands-parents)</option>
+                      <option value={3}>3 générations (8 personnes)</option>
+                      <option value={4}>4 générations (15 personnes)</option>
+                      <option value={5}>5 générations (31 personnes)</option>
+                      <option value={6}>6 générations (63 personnes)</option>
+                    </select>
+                  </div>
+
+                  <button
+                    type="submit"
+                    className="btn btn-primary"
+                    style={{ width: "100%", padding: "0.85rem" }}
+                    disabled={fsImporting}
+                  >
+                    {fsImporting ? "⏳ Synchronisation..." : "🔄 Importer depuis FamilySearch"}
+                  </button>
+                </form>
+              </div>
+            ) : (
+              <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
+                <div style={{
+                  background: "rgba(255, 255, 255, 0.02)",
+                  border: "1px dashed var(--border-subtle)",
+                  padding: "1rem",
+                  borderRadius: "8px",
+                  fontSize: "0.85rem",
+                  color: "var(--text-secondary)"
+                }}>
+                  ℹ️ Votre compte FamilySearch n'est pas encore associé. Connectez-vous dans les paramètres pour activer cette fonction.
+                </div>
+                <a
+                  href="/settings"
+                  className="btn btn-secondary"
+                  style={{ textDecoration: "none", textAlign: "center", padding: "0.85rem" }}
+                >
+                  ⚙️ Associer dans les paramètres
+                </a>
+              </div>
+            )}
+          </div>
+
+          {/* Résultats de l'import FamilySearch */}
+          {fsResult && (
+            <div style={{
+              padding: "1rem",
+              borderRadius: "8px",
+              background: fsResult.success ? "rgba(16, 185, 129, 0.1)" : "rgba(239, 68, 68, 0.1)",
+              border: `1px solid ${fsResult.success ? "var(--accent-emerald)" : "rgba(239, 68, 68, 0.4)"}`,
+              fontSize: "0.9rem",
+              marginTop: "1rem"
+            }}>
+              {fsResult.success ? (
+                <div>
+                  <h4 style={{ color: "var(--accent-emerald)", fontWeight: 700, marginBottom: "0.25rem" }}>
+                    ✅ Arbre synchronisé !
+                  </h4>
+                  <p style={{ color: "var(--text-primary)" }}>{fsResult.message}</p>
+                  <ul style={{ paddingLeft: "1.25rem", marginTop: "0.5rem", color: "var(--text-secondary)" }}>
+                    <li>👥 Individus créés : **{fsResult.peopleCount}**</li>
+                    <li>💍 Unions créées : **{fsResult.unionsCount}**</li>
+                  </ul>
+                  <a href="/tree" className="btn btn-secondary" style={{ marginTop: "1rem", width: "100%", fontSize: "0.85rem" }}>
+                    🌿 Aller voir l'Arbre Interactif
+                  </a>
+                </div>
+              ) : (
+                <div>
+                  <h4 style={{ color: "#ef4444", fontWeight: 700, marginBottom: "0.25rem" }}>
+                    ❌ Échec de la synchronisation
+                  </h4>
+                  <p style={{ color: "var(--text-primary)" }}>{fsResult.error}</p>
+                </div>
+              )}
+            </div>
+          )}
         </div>
 
       </div>

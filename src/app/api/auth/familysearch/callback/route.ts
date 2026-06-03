@@ -1,8 +1,18 @@
 import { NextRequest, NextResponse } from "next/server";
 import { cookies } from "next/headers";
+import { getCurrentUser } from "@/lib/auth";
+import { prisma } from "@/lib/db";
 
 export async function GET(request: NextRequest) {
   try {
+    const user = await getCurrentUser();
+    if (!user) {
+      return NextResponse.json(
+        { error: "Vous devez être connecté pour lier votre compte FamilySearch." },
+        { status: 401 }
+      );
+    }
+
     const { searchParams } = new URL(request.url);
     const code = searchParams.get("code");
     const state = searchParams.get("state");
@@ -28,15 +38,8 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    const clientId = process.env.FAMILYSEARCH_CLIENT_ID;
+    const clientId = process.env.FAMILYSEARCH_CLIENT_ID || "b007E40M8PNO0BH4T1SD";
     const clientSecret = process.env.FAMILYSEARCH_CLIENT_SECRET;
-    
-    if (!clientId) {
-      return NextResponse.json(
-        { error: "FamilySearch Client ID non configuré." },
-        { status: 500 }
-      );
-    }
 
     const fsEnv = process.env.FAMILYSEARCH_ENV || "sandbox";
     const tokenUrl = fsEnv === "production"
@@ -70,41 +73,79 @@ export async function GET(request: NextRequest) {
     if (!response.ok) {
       const errData = await response.text();
       console.error("Échec de l'échange de token avec FamilySearch:", errData);
-      return NextResponse.json(
-        { error: "Impossible d'obtenir le jeton d'accès de FamilySearch." },
-        { status: response.status }
-      );
+      return NextResponse.redirect(`${appUrl}/settings?fs_error=token_exchange_failed`);
     }
 
     const tokenData = await response.json();
     const accessToken = tokenData.access_token;
+    const expiresIn = tokenData.expires_in || 86400;
 
     if (!accessToken) {
-      return NextResponse.json(
-        { error: "Jeton d'accès non retourné par FamilySearch." },
-        { status: 500 }
-      );
+      console.error("Jeton d'accès non retourné par FamilySearch.");
+      return NextResponse.redirect(`${appUrl}/settings?fs_error=missing_access_token`);
     }
 
-    // Calculer la durée de vie du cookie (par défaut 24h ou la valeur expiresIn de l'API)
-    const maxAge = tokenData.expires_in || 86400;
+    // Récupérer les informations de l'utilisateur sur FamilySearch
+    const apiBaseUrl = fsEnv === "production"
+      ? "https://api.familysearch.org"
+      : "https://api-beta.familysearch.org";
+
+    const userProfileResponse = await fetch(`${apiBaseUrl}/platform/users/current`, {
+      headers: {
+        "Accept": "application/json",
+        "Authorization": `Bearer ${accessToken}`,
+      }
+    });
+
+    let fsUserId = "unknown";
+    let fsUsername = "unknown";
+    let fsContactName = "Utilisateur FamilySearch";
+
+    if (userProfileResponse.ok) {
+      const userProfileData = await userProfileResponse.json();
+      const fsUser = userProfileData.users?.[0] || {};
+      fsUserId = fsUser.id || "unknown";
+      fsUsername = fsUser.username || "unknown";
+      fsContactName = fsUser.contactName || fsUser.name || "Utilisateur FamilySearch";
+    } else {
+      console.warn("Impossible de récupérer le profil utilisateur FamilySearch:", await userProfileResponse.text());
+    }
+
+    const expiresAt = new Date(Date.now() + expiresIn * 1000);
+
+    // Sauvegarder la connexion en base de données
+    await prisma.familySearchConnection.upsert({
+      where: { userId: user.id },
+      update: {
+        accessToken,
+        expiresAt,
+        fsUserId,
+        fsUsername,
+        fsContactName,
+      },
+      create: {
+        userId: user.id,
+        accessToken,
+        expiresAt,
+        fsUserId,
+        fsUsername,
+        fsContactName,
+      }
+    });
 
     // Enregistrer le token d'accès dans un cookie sécurisé
     cookieStore.set("fs_access_token", accessToken, {
       httpOnly: true,
       secure: process.env.NODE_ENV === "production",
       sameSite: "lax",
-      maxAge,
+      maxAge: expiresIn,
       path: "/",
     });
 
-    // Rediriger vers l'annuaire des personnes avec un indicateur de succès de connexion
-    return NextResponse.redirect(`${appUrl}/people?fs_connected=true`);
+    return NextResponse.redirect(`${appUrl}/settings?fs_connected=true`);
   } catch (error: any) {
     console.error("Erreur générale dans le callback FamilySearch:", error);
-    return NextResponse.json(
-      { error: "Une erreur interne s'est produite lors de l'authentification." },
-      { status: 500 }
-    );
+    const appUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
+    return NextResponse.redirect(`${appUrl}/settings?fs_error=internal_error`);
   }
 }

@@ -48,6 +48,7 @@ export default function SettingsPage() {
   
   // FamilySearch state
   const [fsConnected, setFsConnected] = useState(false);
+  const [fsContactName, setFsContactName] = useState("");
   const [fsChecking, setFsChecking] = useState(true);
   const [fsDisconnecting, setFsDisconnecting] = useState(false);
 
@@ -78,6 +79,9 @@ export default function SettingsPage() {
       if (response.ok) {
         const data = await response.json();
         setFsConnected(data.connected);
+        if (data.connected) {
+          setFsContactName(data.fsContactName || "");
+        }
       }
     } catch (err) {
       console.error("Error fetching FamilySearch status:", err);
@@ -480,7 +484,7 @@ export default function SettingsPage() {
                 }}
               >
                 <span>✅</span>
-                <strong>Votre compte est actuellement connecté à FamilySearch.</strong>
+                <strong>Votre compte est connecté à FamilySearch{fsContactName ? ` (${fsContactName})` : ""}.</strong>
               </div>
               <p style={{ fontSize: "0.85rem", color: "var(--text-muted)" }}>
                 Vous pouvez dès à présent utiliser l'onglet de recherche FamilySearch sur n'importe quel profil d'ancêtre de votre arbre.
