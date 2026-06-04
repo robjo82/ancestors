@@ -91,7 +91,7 @@ export async function GET(request: NextRequest) {
     // Récupérer les informations de l'utilisateur sur FamilySearch
     const apiBaseUrl = fsEnv === "production"
       ? "https://api.familysearch.org"
-      : "https://api-beta.familysearch.org";
+      : "https://apibeta.familysearch.org";
 
     const userProfileResponse = await fetch(`${apiBaseUrl}/platform/users/current`, {
       headers: {

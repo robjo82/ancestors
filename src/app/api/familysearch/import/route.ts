@@ -72,7 +72,7 @@ export async function POST(request: NextRequest) {
     const fsEnv = process.env.FAMILYSEARCH_ENV || "sandbox";
     const apiBaseUrl = fsEnv === "production"
       ? "https://api.familysearch.org"
-      : "https://api-beta.familysearch.org";
+      : "https://apibeta.familysearch.org";
 
     const headers = {
       "Accept": "application/json",
