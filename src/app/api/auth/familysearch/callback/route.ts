@@ -4,6 +4,10 @@ import { getCurrentUser } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 
 export async function GET(request: NextRequest) {
+  const host = request.headers.get("x-forwarded-host") || request.headers.get("host") || "localhost:3000";
+  const protocol = request.headers.get("x-forwarded-proto") || "http";
+  const appUrl = `${protocol}://${host}`;
+
   try {
     const user = await getCurrentUser();
     if (!user) {
@@ -46,7 +50,6 @@ export async function GET(request: NextRequest) {
       ? "https://ident.familysearch.org/cis-web/oauth2/v3/token"
       : "https://identbeta.familysearch.org/cis-web/oauth2/v3/token";
 
-    const appUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
     const redirectUri = `${appUrl}/api/auth/familysearch/callback`;
 
     // Échange du code d'autorisation contre un token d'accès
@@ -145,7 +148,6 @@ export async function GET(request: NextRequest) {
     return NextResponse.redirect(`${appUrl}/settings?fs_connected=true`);
   } catch (error: any) {
     console.error("Erreur générale dans le callback FamilySearch:", error);
-    const appUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
     return NextResponse.redirect(`${appUrl}/settings?fs_error=internal_error`);
   }
 }
