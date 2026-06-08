@@ -84,10 +84,60 @@ export default function InteractiveTreeClient({ people, unions }: InteractiveTre
     }
   }, [people, focusId]);
 
-  // Réinitialiser la caméra au centre
-  const resetCamera = () => {
-    setZoom(1);
-    setPan({ x: 150, y: 100 });
+  // Recadrer l'arbre automatiquement à chaque changement majeur de structure ou de layout
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      fitToScreen();
+    }, 100);
+    return () => clearTimeout(timer);
+  }, [focusId, layoutMode, people.length, unions.length]);
+
+  // Recentrer et ajuster l'arbre à l'écran (Fit to screen)
+  const fitToScreen = () => {
+    if (!containerRef.current || nodes.length === 0) return;
+
+    const containerWidth = containerRef.current.clientWidth;
+    const containerHeight = containerRef.current.clientHeight;
+
+    let minX = Infinity;
+    let maxX = -Infinity;
+    let minY = Infinity;
+    let maxY = -Infinity;
+
+    nodes.forEach(node => {
+      if (node.x < minX) minX = node.x;
+      if (node.x + CARD_WIDTH > maxX) maxX = node.x + CARD_WIDTH;
+      if (node.y < minY) minY = node.y;
+      if (node.y + CARD_HEIGHT > maxY) maxY = node.y + CARD_HEIGHT;
+    });
+
+    placeholders.forEach(ph => {
+      if (ph.x < minX) minX = ph.x;
+      if (ph.x + CARD_WIDTH > maxX) maxX = ph.x + CARD_WIDTH;
+      if (ph.y < minY) minY = ph.y;
+      if (ph.y + CARD_HEIGHT > maxY) maxY = ph.y + CARD_HEIGHT;
+    });
+
+    if (minX === Infinity) return;
+
+    const treeWidth = maxX - minX;
+    const treeHeight = maxY - minY;
+
+    const padding = 50; // Marge de respiration en pixels
+    const scaleX = (containerWidth - 2 * padding) / treeWidth;
+    const scaleY = (containerHeight - 2 * padding) / treeHeight;
+
+    // Zoom calculé, contraint entre 0.3 et 1.1 pour un rendu premium
+    const newZoom = Math.min(Math.max(Math.min(scaleX, scaleY), 0.3), 1.1);
+
+    const centerX = (minX + maxX) / 2;
+    const centerY = (minY + maxY) / 2;
+
+    const newPanX = containerWidth / 2 - centerX * newZoom;
+    const newPanY = containerHeight / 2 - centerY * newZoom;
+
+    setZoom(newZoom);
+    setPan({ x: newPanX, y: newPanY });
   };
 
   const getYearOnly = (dateStr: string | null | undefined): string => {
@@ -770,10 +820,24 @@ export default function InteractiveTreeClient({ people, unions }: InteractiveTre
 
   const handleWheel = (e: React.WheelEvent) => {
     e.preventDefault();
-    const zoomIntensity = 0.05;
+    if (!containerRef.current) return;
+
+    const rect = containerRef.current.getBoundingClientRect();
+    const mouseX = e.clientX - rect.left;
+    const mouseY = e.clientY - rect.top;
+
+    const zoomIntensity = 0.08;
     const scrollDirection = e.deltaY < 0 ? 1 : -1;
-    const newZoom = Math.min(Math.max(zoom + scrollDirection * zoomIntensity * zoom, 0.2), 3);
-    setZoom(newZoom);
+
+    const nextZoom = Math.min(Math.max(zoom * (1 + scrollDirection * zoomIntensity), 0.15), 3);
+
+    // Zoom centré sur la position de la souris
+    const ratio = nextZoom / zoom;
+    const nextPanX = mouseX - (mouseX - pan.x) * ratio;
+    const nextPanY = mouseY - (mouseY - pan.y) * ratio;
+
+    setZoom(nextZoom);
+    setPan({ x: nextPanX, y: nextPanY });
   };
 
   // Recherche dans l'arbre
@@ -928,13 +992,39 @@ export default function InteractiveTreeClient({ people, unions }: InteractiveTre
 
         {/* Caméra boutons rapides */}
         <div style={{ display: "flex", gap: "0.5rem" }}>
-          <button onClick={resetCamera} className="btn btn-secondary" style={{ flex: 1, padding: "0.4rem", fontSize: "0.75rem" }}>
-            🎯 Recadrer
+          <button onClick={fitToScreen} className="btn btn-secondary" style={{ flex: 1, padding: "0.4rem", fontSize: "0.75rem" }}>
+            🎯 Ajuster l'écran
           </button>
-          <button onClick={() => setZoom(z => Math.min(z + 0.1, 3))} className="btn btn-secondary" style={{ padding: "0.4rem 0.8rem", fontSize: "0.75rem" }}>
+          <button 
+            onClick={() => {
+              if (!containerRef.current) return;
+              const nextZoom = Math.min(zoom + 0.15, 3);
+              const rect = containerRef.current.getBoundingClientRect();
+              setPan(p => ({
+                x: rect.width / 2 - (rect.width / 2 - p.x) * (nextZoom / zoom),
+                y: rect.height / 2 - (rect.height / 2 - p.y) * (nextZoom / zoom)
+              }));
+              setZoom(nextZoom);
+            }} 
+            className="btn btn-secondary" 
+            style={{ padding: "0.4rem 0.8rem", fontSize: "0.75rem" }}
+          >
             ➕
           </button>
-          <button onClick={() => setZoom(z => Math.max(z - 0.1, 0.2))} className="btn btn-secondary" style={{ padding: "0.4rem 0.8rem", fontSize: "0.75rem" }}>
+          <button 
+            onClick={() => {
+              if (!containerRef.current) return;
+              const nextZoom = Math.max(zoom - 0.15, 0.15);
+              const rect = containerRef.current.getBoundingClientRect();
+              setPan(p => ({
+                x: rect.width / 2 - (rect.width / 2 - p.x) * (nextZoom / zoom),
+                y: rect.height / 2 - (rect.height / 2 - p.y) * (nextZoom / zoom)
+              }));
+              setZoom(nextZoom);
+            }} 
+            className="btn btn-secondary" 
+            style={{ padding: "0.4rem 0.8rem", fontSize: "0.75rem" }}
+          >
             ➖
           </button>
         </div>
@@ -1043,11 +1133,42 @@ export default function InteractiveTreeClient({ people, unions }: InteractiveTre
                 strokeDasharray = "2,4";
               }
 
+              // Générer un chemin courbe de Bézier élégant en fonction du layout
+              const getLinkPath = () => {
+                const { fromX, fromY, toX, toY, color } = link;
+                
+                // Union/mariage : ligne horizontale droite
+                if (color === "var(--accent-gold)" || color === "rgba(212, 175, 55, 0.6)" || color?.includes("212, 175, 55")) {
+                  return `M ${fromX} ${fromY} L ${toX} ${toY}`;
+                }
+                
+                if (layoutMode === "pedigree") {
+                  // S-curve horizontale
+                  const midX = (fromX + toX) / 2;
+                  return `M ${fromX} ${fromY} C ${midX} ${fromY}, ${midX} ${toY}, ${toX} ${toY}`;
+                } else if (layoutMode === "descendants") {
+                  // S-curve verticale
+                  const midY = (fromY + toY) / 2;
+                  return `M ${fromX} ${fromY} C ${fromX} ${midY}, ${toX} ${midY}, ${toX} ${toY}`;
+                } else {
+                  // Vue relative : courbe verticale ou horizontale selon l'orientation
+                  const dx = Math.abs(fromX - toX);
+                  const dy = Math.abs(fromY - toY);
+                  if (dy > dx) {
+                    const midY = (fromY + toY) / 2;
+                    return `M ${fromX} ${fromY} C ${fromX} ${midY}, ${toX} ${midY}, ${toX} ${toY}`;
+                  } else {
+                    const midX = (fromX + toX) / 2;
+                    return `M ${fromX} ${fromY} C ${midX} ${fromY}, ${midX} ${toY}, ${toX} ${toY}`;
+                  }
+                }
+              };
+
               return (
                 <g key={`l-${idx}`}>
-                  {/* Ligne coudée élégante (chemin orthogonal ou direct) */}
+                  {/* Courbe de Bézier élégante fluide */}
                   <path 
-                    d={`M ${link.fromX} ${link.fromY} L ${(link.fromX + link.toX) / 2} ${link.fromY} L ${(link.fromX + link.toX) / 2} ${link.toY} L ${link.toX} ${link.toY}`}
+                    d={getLinkPath()}
                     fill="none" 
                     stroke={strokeColor} 
                     strokeWidth={strokeWidth}
@@ -1368,6 +1489,71 @@ export default function InteractiveTreeClient({ people, unions }: InteractiveTre
 
           </g>
         </svg>
+
+        {/* Barre de navigation flottante premium sur le canvas */}
+        <div 
+          className="glass animate-fade-in" 
+          style={{ 
+            position: "absolute", 
+            bottom: "1.5rem", 
+            left: "50%", 
+            transform: "translateX(-50%)", 
+            zIndex: 10, 
+            padding: "0.5rem 1rem", 
+            display: "flex", 
+            alignItems: "center", 
+            gap: "0.75rem",
+            background: "rgba(18, 18, 18, 0.75)",
+            backdropFilter: "blur(20px)",
+            border: "1px solid rgba(255, 255, 255, 0.1)",
+            boxShadow: "0 10px 30px rgba(0,0,0,0.5)",
+            borderRadius: "50px"
+          }}
+        >
+          <button 
+            onClick={fitToScreen} 
+            style={{ background: "transparent", border: "none", color: "var(--text-primary)", cursor: "pointer", fontSize: "0.85rem", padding: "0.25rem 0.5rem", display: "flex", alignItems: "center", gap: "0.3rem", fontWeight: 600 }}
+            title="Ajuster l'arbre à l'écran"
+          >
+            🎯 <span style={{ fontSize: "0.75rem" }}>Ajuster</span>
+          </button>
+          <span style={{ color: "rgba(255,255,255,0.15)" }}>|</span>
+          <button 
+            onClick={() => {
+              if (!containerRef.current) return;
+              const nextZoom = Math.max(zoom - 0.15, 0.15);
+              const rect = containerRef.current.getBoundingClientRect();
+              setPan(p => ({
+                x: rect.width / 2 - (rect.width / 2 - p.x) * (nextZoom / zoom),
+                y: rect.height / 2 - (rect.height / 2 - p.y) * (nextZoom / zoom)
+              }));
+              setZoom(nextZoom);
+            }} 
+            style={{ background: "transparent", border: "none", color: "var(--text-primary)", cursor: "pointer", fontSize: "0.85rem", padding: "0.25rem 0.5rem" }}
+            title="Zoom arrière"
+          >
+            ➖
+          </button>
+          <span style={{ fontSize: "0.75rem", color: "var(--text-secondary)", minWidth: "40px", textAlign: "center", fontWeight: 600 }}>
+            {Math.round(zoom * 100)}%
+          </span>
+          <button 
+            onClick={() => {
+              if (!containerRef.current) return;
+              const nextZoom = Math.min(zoom + 0.15, 3.0);
+              const rect = containerRef.current.getBoundingClientRect();
+              setPan(p => ({
+                x: rect.width / 2 - (rect.width / 2 - p.x) * (nextZoom / zoom),
+                y: rect.height / 2 - (rect.height / 2 - p.y) * (nextZoom / zoom)
+              }));
+              setZoom(nextZoom);
+            }} 
+            style={{ background: "transparent", border: "none", color: "var(--text-primary)", cursor: "pointer", fontSize: "0.85rem", padding: "0.25rem 0.5rem" }}
+            title="Zoom avant"
+          >
+            ➕
+          </button>
+        </div>
       </div>
 
       {/* 3. AIDE CONTEXTUELLE FLOTTANTE */}

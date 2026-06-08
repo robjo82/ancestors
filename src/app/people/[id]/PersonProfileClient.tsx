@@ -254,6 +254,13 @@ export default function PersonProfileClient({
   const [searchingMatchId, setSearchingMatchId] = useState(false);
   const [searchError, setSearchError] = useState("");
 
+  // État de recherche FamilySearch
+  const [familySearchResults, setFamilySearchResults] = useState<any[]>([]);
+  const [searchingFamilySearch, setSearchingFamilySearch] = useState(false);
+  const [familySearchError, setFamilySearchError] = useState("");
+  const [isFsConnected, setIsFsConnected] = useState(false);
+  const [searchSubTab, setSearchSubTab] = useState<"insee" | "familysearch">("insee");
+
   // État d'édition d'état civil complet
   const [isEditingCivic, setIsEditingCivic] = useState(false);
   const [civicData, setCivicData] = useState({
@@ -326,12 +333,32 @@ export default function PersonProfileClient({
 
   const birthYear = person.birthDate ? person.birthDate.match(/\d{4}/)?.[0] || "" : "";
 
-  // Lancement automatique de la recherche MatchID à l'affichage de l'onglet
+  // Vérification du statut de connexion FamilySearch
   useEffect(() => {
-    if (activeTab === "search" && matchIdResults.length === 0) {
-      triggerMatchIdSearch();
+    const checkFsStatus = async () => {
+      try {
+        const response = await fetch("/api/auth/familysearch/status");
+        if (response.ok) {
+          const data = await response.json();
+          setIsFsConnected(data.connected);
+        }
+      } catch (err) {
+        console.error("Erreur de statut FamilySearch:", err);
+      }
+    };
+    checkFsStatus();
+  }, []);
+
+  // Lancement automatique de la recherche en fonction de l'onglet actif
+  useEffect(() => {
+    if (activeTab === "search") {
+      if (searchSubTab === "insee" && matchIdResults.length === 0) {
+        triggerMatchIdSearch();
+      } else if (searchSubTab === "familysearch" && familySearchResults.length === 0 && isFsConnected) {
+        triggerFamilySearch();
+      }
     }
-  }, [activeTab]);
+  }, [activeTab, searchSubTab, isFsConnected]);
 
   const triggerMatchIdSearch = async () => {
     setSearchingMatchId(true);
@@ -348,6 +375,28 @@ export default function PersonProfileClient({
       setSearchError("Erreur de connexion avec le proxy de recherche.");
     } finally {
       setSearchingMatchId(false);
+    }
+  };
+
+  const triggerFamilySearch = async () => {
+    setSearchingFamilySearch(true);
+    setFamilySearchError("");
+    try {
+      const response = await fetch(`/api/search/familysearch?firstName=${encodeURIComponent(person.firstName)}&lastName=${encodeURIComponent(person.lastName)}&birthYear=${birthYear}`);
+      if (response.ok) {
+        const data = await response.json();
+        setFamilySearchResults(data);
+      } else {
+        const err = await response.json();
+        if (err.error === "need_login") {
+          setIsFsConnected(false);
+        }
+        setFamilySearchError(err.message || "Impossible d'obtenir les correspondances FamilySearch.");
+      }
+    } catch (e) {
+      setFamilySearchError("Erreur de connexion avec FamilySearch.");
+    } finally {
+      setSearchingFamilySearch(false);
     }
   };
 
@@ -371,6 +420,44 @@ export default function PersonProfileClient({
       
       if (response.ok) {
         alert("Profil mis à jour avec les informations de l'INSEE !");
+        router.refresh();
+      } else {
+        alert("Erreur lors de la mise à jour.");
+      }
+    } catch (e) {
+      alert("Erreur de communication avec le serveur.");
+    }
+  };
+
+  const applyFamilySearchInfo = async (result: any) => {
+    const confirmMsg = `Voulez-vous importer les données de FamilySearch dans le profil de ${person.firstName} ?\n` +
+      `• Naissance : ${result.birthDate || "Inconnue"} à ${result.birthPlace || "Inconnu"}\n` +
+      `• Décès : ${result.deathDate || "Inconnu"} à ${result.deathPlace || "Inconnu"}`;
+
+    if (!confirm(confirmMsg)) {
+      return;
+    }
+    
+    try {
+      const payload: any = {
+        firstName: person.firstName,
+        lastName: person.lastName,
+        gender: person.gender,
+      };
+      
+      if (result.birthDate) payload.birthDate = result.birthDate;
+      if (result.birthPlace) payload.birthPlace = result.birthPlace;
+      if (result.deathDate) payload.deathDate = result.deathDate;
+      if (result.deathPlace) payload.deathPlace = result.deathPlace;
+
+      const response = await fetch(`/api/people/${person.id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      
+      if (response.ok) {
+        alert("Profil mis à jour avec les informations de FamilySearch !");
         router.refresh();
       } else {
         alert("Erreur lors de la mise à jour.");
@@ -1617,77 +1704,202 @@ export default function PersonProfileClient({
 
         {/* 5. Onglet Recherche en Ligne */}
         {activeTab === "search" && (
-          <div style={{ display: "flex", flexDirection: "column", gap: "2rem" }}>
+          <div style={{ display: "flex", flexDirection: "column", gap: "1.5rem" }}>
             
-            {/* Recherche INSEE MatchID */}
-            <div className="card glass">
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1rem" }}>
-                <h3 className="title-font" style={{ fontSize: "1.4rem", color: "var(--accent-gold)" }}>
-                  🔎 Correspondances Décès INSEE (MatchID API)
-                </h3>
-                <button onClick={triggerMatchIdSearch} className="btn btn-secondary" style={{ padding: "0.4rem 0.8rem", fontSize: "0.85rem" }} disabled={searchingMatchId}>
-                  🔄 Actualiser
-                </button>
-              </div>
+            {/* Sélecteur de source de données */}
+            <div className="glass" style={{ display: "flex", gap: "0.5rem", padding: "0.4rem", background: "rgba(255, 255, 255, 0.02)", border: "1px solid var(--border-subtle)", borderRadius: "10px", width: "fit-content" }}>
+              <button 
+                onClick={() => setSearchSubTab("insee")}
+                style={{ 
+                  padding: "0.5rem 1.25rem", 
+                  fontSize: "0.85rem", 
+                  borderRadius: "8px", 
+                  fontWeight: 600,
+                  cursor: "pointer",
+                  background: searchSubTab === "insee" ? "var(--accent-emerald)" : "transparent",
+                  color: searchSubTab === "insee" ? "white" : "var(--text-secondary)",
+                  transition: "var(--transition-fast)"
+                }}
+              >
+                🇫🇷 Actes Décès INSEE
+              </button>
+              <button 
+                onClick={() => setSearchSubTab("familysearch")}
+                style={{ 
+                  padding: "0.5rem 1.25rem", 
+                  fontSize: "0.85rem", 
+                  borderRadius: "8px", 
+                  fontWeight: 600,
+                  cursor: "pointer",
+                  background: searchSubTab === "familysearch" ? "var(--accent-gold)" : "transparent",
+                  color: searchSubTab === "familysearch" ? "black" : "var(--text-secondary)",
+                  transition: "var(--transition-fast)"
+                }}
+              >
+                🌍 FamilySearch Tree
+              </button>
+            </div>
 
-              <p style={{ color: "var(--text-secondary)", fontSize: "0.9rem", marginBottom: "1.5rem" }}>
-                Ce module interroge en temps réel le répertoire officiel des décès de l'INSEE (France) depuis 1970 pour trouver des actes correspondant au profil de <strong>{person.firstName} {person.lastName}</strong>.
-              </p>
+            {/* Contenu Sous-onglet INSEE */}
+            {searchSubTab === "insee" && (
+              <div className="card glass">
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1rem" }}>
+                  <h3 className="title-font" style={{ fontSize: "1.4rem", color: "var(--accent-gold)" }}>
+                    🔎 Correspondances Décès INSEE (MatchID API)
+                  </h3>
+                  <button onClick={triggerMatchIdSearch} className="btn btn-secondary" style={{ padding: "0.4rem 0.8rem", fontSize: "0.85rem" }} disabled={searchingMatchId}>
+                    🔄 Actualiser
+                  </button>
+                </div>
 
-              {searchingMatchId ? (
-                <div style={{ textAlign: "center", padding: "2rem", color: "var(--text-muted)" }}>
-                  ⏳ Recherche en cours sur les serveurs de l'INSEE...
-                </div>
-              ) : searchError ? (
-                <div style={{ padding: "1rem", background: "rgba(239, 68, 68, 0.1)", border: "1px solid #ef4444", color: "#ef4444", borderRadius: "8px", fontSize: "0.9rem" }}>
-                  {searchError}
-                </div>
-              ) : matchIdResults.length === 0 ? (
-                <p style={{ color: "var(--text-muted)", fontStyle: "italic", textAlign: "center", padding: "2rem" }}>
-                  Aucun décès officiel enregistré à l'INSEE ne semble correspondre à cette personne. (Il se peut qu'elle soit vivante ou décédée avant 1970).
+                <p style={{ color: "var(--text-secondary)", fontSize: "0.9rem", marginBottom: "1.5rem" }}>
+                  Ce module interroge en temps réel le répertoire officiel des décès de l'INSEE (France) depuis 1970 pour trouver des actes correspondant au profil de <strong>{person.firstName} {person.lastName}</strong>.
                 </p>
-              ) : (
-                <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
-                  {matchIdResults.map((r, idx) => (
-                    <div 
-                      key={idx} 
-                      className="card" 
-                      style={{ 
-                        background: "var(--bg-tertiary)", 
-                        border: "1px solid var(--border-subtle)", 
-                        padding: "1.25rem",
-                        display: "flex",
-                        justifyContent: "space-between",
-                        alignItems: "center",
-                        flexWrap: "wrap",
-                        gap: "1rem"
-                      }}
-                    >
-                      <div style={{ display: "flex", flexDirection: "column", gap: "0.25rem" }}>
-                        <span style={{ fontSize: "0.75rem", background: "var(--accent-emerald-glow)", color: "var(--accent-emerald)", padding: "0.1rem 0.5rem", borderRadius: "4px", alignSelf: "flex-start", fontWeight: 700 }}>
-                          CORRESPONDANCE TROUVÉE ({Math.round(r.score * 100)}%)
-                        </span>
-                        <strong style={{ fontSize: "1.1rem", color: "var(--text-primary)" }}>{r.name}</strong>
-                        <span style={{ fontSize: "0.9rem", color: "var(--text-secondary)" }}>
-                          👶 Né(e) le {r.birthDate} à {r.birthPlace}
-                        </span>
-                        <span style={{ fontSize: "0.9rem", color: "#ef4444", fontWeight: 600 }}>
-                          💀 Décédé(e) le {r.deathDate} à {r.deathPlace}
-                        </span>
-                      </div>
-                      
-                      <button 
-                        onClick={() => applyMatchIdInfo(r)}
-                        className="btn btn-primary"
-                        style={{ fontSize: "0.85rem", padding: "0.5rem 1rem" }}
+
+                {searchingMatchId ? (
+                  <div style={{ textAlign: "center", padding: "2rem", color: "var(--text-muted)" }}>
+                    ⏳ Recherche en cours sur les serveurs de l'INSEE...
+                  </div>
+                ) : searchError ? (
+                  <div style={{ padding: "1rem", background: "rgba(239, 68, 68, 0.1)", border: "1px solid #ef4444", color: "#ef4444", borderRadius: "8px", fontSize: "0.9rem" }}>
+                    {searchError}
+                  </div>
+                ) : matchIdResults.length === 0 ? (
+                  <p style={{ color: "var(--text-muted)", fontStyle: "italic", textAlign: "center", padding: "2rem" }}>
+                    Aucun décès officiel enregistré à l'INSEE ne semble correspondre à cette personne. (Il se peut qu'elle soit vivante ou décédée avant 1970).
+                  </p>
+                ) : (
+                  <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
+                    {matchIdResults.map((r, idx) => (
+                      <div 
+                        key={idx} 
+                        className="card animate-fade-in" 
+                        style={{ 
+                          background: "var(--bg-tertiary)", 
+                          border: "1px solid var(--border-subtle)", 
+                          padding: "1.25rem",
+                          display: "flex",
+                          justifyContent: "space-between",
+                          alignItems: "center",
+                          flexWrap: "wrap",
+                          gap: "1rem"
+                        }}
                       >
-                        💾 Importer les dates
+                        <div style={{ display: "flex", flexDirection: "column", gap: "0.25rem" }}>
+                          <span style={{ fontSize: "0.75rem", background: "var(--accent-emerald-glow)", color: "var(--accent-emerald)", padding: "0.1rem 0.5rem", borderRadius: "4px", alignSelf: "flex-start", fontWeight: 700 }}>
+                            CORRESPONDANCE TROUVÉE ({Math.round(r.score * 100)}%)
+                          </span>
+                          <strong style={{ fontSize: "1.1rem", color: "var(--text-primary)" }}>{r.name}</strong>
+                          <span style={{ fontSize: "0.9rem", color: "var(--text-secondary)" }}>
+                            👶 Né(e) le {r.birthDate || "Inconnue"} à {r.birthPlace || "Inconnu"}
+                          </span>
+                          <span style={{ fontSize: "0.9rem", color: "#ef4444", fontWeight: 600 }}>
+                            💀 Décédé(e) le {r.deathDate || "Inconnu"} à {r.deathPlace || "Inconnu"}
+                          </span>
+                        </div>
+                        
+                        <button 
+                          onClick={() => applyMatchIdInfo(r)}
+                          className="btn btn-primary"
+                          style={{ fontSize: "0.85rem", padding: "0.5rem 1rem" }}
+                        >
+                          💾 Importer les dates
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Contenu Sous-onglet FamilySearch */}
+            {searchSubTab === "familysearch" && (
+              <>
+                {!isFsConnected ? (
+                  <div className="card glass animate-fade-in" style={{ padding: "3rem", textAlign: "center", display: "flex", flexDirection: "column", alignItems: "center", gap: "1.25rem" }}>
+                    <span style={{ fontSize: "3rem" }}>🌍</span>
+                    <h3 className="title-font" style={{ fontSize: "1.4rem", color: "var(--accent-gold)", margin: 0 }}>
+                      Intégration FamilySearch
+                    </h3>
+                    <p style={{ color: "var(--text-secondary)", fontSize: "0.95rem", maxWidth: "480px", margin: 0 }}>
+                      Associez votre compte FamilySearch dans vos paramètres pour rechercher directement cet ancêtre dans l'arbre mondial et importer ses informations d'un simple clic.
+                    </p>
+                    <a href="/settings" className="btn btn-accent" style={{ display: "inline-flex", padding: "0.6rem 1.25rem", fontSize: "0.85rem", fontWeight: 700 }}>
+                      🔗 Connecter mon compte FamilySearch
+                    </a>
+                  </div>
+                ) : (
+                  <div className="card glass animate-fade-in">
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1rem" }}>
+                      <h3 className="title-font" style={{ fontSize: "1.4rem", color: "var(--accent-gold)" }}>
+                        🌍 Correspondances de l'Arbre FamilySearch
+                      </h3>
+                      <button onClick={triggerFamilySearch} className="btn btn-secondary" style={{ padding: "0.4rem 0.8rem", fontSize: "0.85rem" }} disabled={searchingFamilySearch}>
+                        🔄 Actualiser
                       </button>
                     </div>
-                  ))}
-                </div>
-              )}
-            </div>
+
+                    <p style={{ color: "var(--text-secondary)", fontSize: "0.9rem", marginBottom: "1.5rem" }}>
+                      Recherche d'individus dans l'arbre mondial de FamilySearch correspondant à <strong>{person.firstName} {person.lastName}</strong> ({birthYear ? `né(e) en ${birthYear}` : "année de naissance inconnue"}).
+                    </p>
+
+                    {searchingFamilySearch ? (
+                      <div style={{ textAlign: "center", padding: "2rem", color: "var(--text-muted)" }}>
+                        ⏳ Recherche en cours sur FamilySearch...
+                      </div>
+                    ) : familySearchError ? (
+                      <div style={{ padding: "1rem", background: "rgba(239, 68, 68, 0.1)", border: "1px solid #ef4444", color: "#ef4444", borderRadius: "8px", fontSize: "0.9rem" }}>
+                        {familySearchError}
+                      </div>
+                    ) : familySearchResults.length === 0 ? (
+                      <p style={{ color: "var(--text-muted)", fontStyle: "italic", textAlign: "center", padding: "2rem" }}>
+                        Aucun résultat correspondant trouvé sur FamilySearch.
+                      </p>
+                    ) : (
+                      <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
+                        {familySearchResults.map((r, idx) => (
+                          <div 
+                            key={idx} 
+                            className="card animate-fade-in" 
+                            style={{ 
+                              background: "var(--bg-tertiary)", 
+                              border: "1px solid var(--border-subtle)", 
+                              padding: "1.25rem",
+                              display: "flex",
+                              justifyContent: "space-between",
+                              alignItems: "center",
+                              flexWrap: "wrap",
+                              gap: "1rem"
+                            }}
+                          >
+                            <div style={{ display: "flex", flexDirection: "column", gap: "0.25rem" }}>
+                              <span style={{ fontSize: "0.75rem", background: "rgba(212, 175, 55, 0.15)", color: "var(--accent-gold)", padding: "0.1rem 0.5rem", borderRadius: "4px", alignSelf: "flex-start", fontWeight: 700 }}>
+                                MATCH FAMILYSEARCH (ID: {r.fsId})
+                              </span>
+                              <strong style={{ fontSize: "1.1rem", color: "var(--text-primary)" }}>{r.name}</strong>
+                              <span style={{ fontSize: "0.9rem", color: "var(--text-secondary)" }}>
+                                👶 Né(e) le {r.birthDate || "Inconnue"} à {r.birthPlace || "Inconnu"}
+                              </span>
+                              <span style={{ fontSize: "0.9rem", color: "var(--text-secondary)" }}>
+                                💀 Décédé(e) le {r.deathDate || "Inconnu"} à {r.deathPlace || "Inconnu"}
+                              </span>
+                            </div>
+                            
+                            <button 
+                              onClick={() => applyFamilySearchInfo(r)}
+                              className="btn btn-accent"
+                              style={{ fontSize: "0.85rem", padding: "0.5rem 1rem", fontWeight: 700 }}
+                            >
+                              💾 Importer les données
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </>
+            )}
 
             {/* Liens de recherche assistée */}
             <div className="card glass">

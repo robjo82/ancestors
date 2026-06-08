@@ -40,33 +40,69 @@ export async function GET(request: NextRequest) {
     }
     
     try {
-      const response = await fetch("https://api.matchid.io/deces/v2/search", {
-        method: "POST",
+      const url = new URL("https://deces.matchid.io/deces/api/v1/search");
+      if (lastName) url.searchParams.set("lastName", lastName);
+      if (firstName) url.searchParams.set("firstName", firstName);
+      if (birthYear) url.searchParams.set("birthDate", birthYear);
+      url.searchParams.set("size", "15");
+
+      const response = await fetch(url.toString(), {
+        method: "GET",
         headers: {
-          "Content-Type": "application/json",
+          "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+          "Accept": "application/json",
         },
-        body: JSON.stringify(requestBody),
-        // Timeout de 4 secondes pour éviter de bloquer l'interface
-        signal: AbortSignal.timeout(4000),
+        signal: AbortSignal.timeout(5000),
       });
       
       if (response.ok) {
         const data = await response.json();
         
-        // Formater les résultats renvoyés par MatchID
-        // MatchID renvoie les résultats dans hits.hits
-        const results = (data.hits?.hits || []).map((hit: any) => {
-          const source = hit._source;
+        const formatMatchIdDate = (dateStr: string | null | undefined): string | null => {
+          if (!dateStr || dateStr.length !== 8) return null;
+          const y = dateStr.substring(0, 4);
+          const m = dateStr.substring(4, 6);
+          const d = dateStr.substring(6, 8);
+          if (m === "00") return y;
+          if (d === "00") return `${y}-${m}`;
+          return `${y}-${m}-${d}`;
+        };
+
+        const formatMatchIdLocation = (loc: any): string | null => {
+          if (!loc) return null;
+          const city = loc.city;
+          const cityStr = Array.isArray(city) ? city[0] : (city || "");
+          const dept = loc.departmentCode;
+          const country = loc.country || "France";
+          
+          if (!cityStr && !country) return null;
+          
+          let mainPlace = cityStr;
+          if (cityStr && dept) {
+            mainPlace = `${cityStr} (${dept})`;
+          }
+          
+          if (mainPlace) {
+            return `${mainPlace}, ${country}`;
+          }
+          return country;
+        };
+
+        const results = (data.response?.persons || []).map((person: any) => {
+          const firstNames = person.name?.first || [];
+          const firstNameStr = firstNames.join(" ");
+          const lastNameStr = person.name?.last || "";
+          
           return {
-            name: source.name?.nom + " " + source.name?.prenom,
-            firstName: source.name?.prenom,
-            lastName: source.name?.nom,
-            gender: source.sex === "M" ? "M" : "F",
-            birthDate: source.birth?.date,
-            birthPlace: source.birth?.place,
-            deathDate: source.death?.date,
-            deathPlace: source.death?.place,
-            score: hit._score,
+            name: `${lastNameStr.toUpperCase()} ${firstNameStr}`,
+            firstName: firstNameStr,
+            lastName: lastNameStr,
+            gender: person.sex === "M" ? "M" : "F",
+            birthDate: formatMatchIdDate(person.birth?.date),
+            birthPlace: formatMatchIdLocation(person.birth?.location),
+            deathDate: formatMatchIdDate(person.death?.date),
+            deathPlace: formatMatchIdLocation(person.death?.location),
+            score: person.score || 1.0,
           };
         });
         
