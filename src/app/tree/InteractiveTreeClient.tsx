@@ -57,6 +57,7 @@ export default function InteractiveTreeClient({ people, unions }: InteractiveTre
   const [maxGenerations, setMaxGenerations] = useState<number>(4);
   const [searchQuery, setSearchQuery] = useState<string>("");
   const [showSearchList, setShowSearchList] = useState<boolean>(false);
+  const [isControlsOpen, setIsControlsOpen] = useState<boolean>(true);
   
   // États de navigation (Zoom & Pan)
   const [zoom, setZoom] = useState<number>(1);
@@ -83,6 +84,14 @@ export default function InteractiveTreeClient({ people, unions }: InteractiveTre
       setFocusId(firstPerson.id);
     }
   }, [people, focusId]);
+
+  // Adapter les volets à l'écran mobile à l'initialisation
+  useEffect(() => {
+    if (typeof window !== "undefined" && window.innerWidth < 768) {
+      setIsControlsOpen(false);
+      setIsSidebarOpen(false);
+    }
+  }, []);
 
   // Recadrer l'arbre automatiquement à chaque changement majeur de structure ou de layout
   useEffect(() => {
@@ -851,213 +860,268 @@ export default function InteractiveTreeClient({ people, unions }: InteractiveTre
     <div style={{ flex: 1, display: "flex", overflow: "hidden", position: "relative", background: "var(--bg-primary)" }}>
       
       {/* 1. PANNEAU DE RECHERCHE LATÉRAL & CONTRÔLES */}
-      <div 
-        className="glass" 
-        style={{ 
-          position: "absolute", 
-          top: "1rem", 
-          left: "1rem", 
-          zIndex: 10, 
-          padding: "1rem", 
-          width: "300px", 
-          display: "flex", 
-          flexDirection: "column", 
-          gap: "1rem" 
-        }}
-      >
-        <div style={{ position: "relative" }}>
-          <input 
-            type="text" 
-            placeholder="🔍 Centrer sur un ancêtre..." 
-            value={searchQuery}
-            onChange={(e) => { setSearchQuery(e.target.value); setShowSearchList(true); }}
-            onFocus={() => setShowSearchList(true)}
-            className="input-field"
-            style={{ width: "100%", paddingRight: "2rem", fontSize: "0.85rem" }}
-          />
-          {searchQuery && (
+      {isControlsOpen ? (
+        <div 
+          className="glass tree-controls-panel" 
+          style={{ 
+            position: "absolute", 
+            top: "1rem", 
+            left: "1rem", 
+            zIndex: 10, 
+            padding: "1rem", 
+            width: "300px", 
+            display: "flex", 
+            flexDirection: "column", 
+            gap: "1rem",
+            maxHeight: "calc(100% - 2rem)",
+            overflowY: "auto",
+            background: "rgba(18, 18, 18, 0.75)",
+            backdropFilter: "blur(16px)",
+            border: "1px solid var(--border-subtle)",
+            boxShadow: "0 10px 30px rgba(0,0,0,0.4)"
+          }}
+        >
+          {/* Header du panneau */}
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", borderBottom: "1px solid var(--border-subtle)", paddingBottom: "0.5rem" }}>
+            <span style={{ fontSize: "0.8rem", fontWeight: 700, color: "var(--accent-gold)", display: "flex", alignItems: "center", gap: "0.4rem" }}>
+              🌿 Configuration
+            </span>
             <button 
-              onClick={() => { setSearchQuery(""); setShowSearchList(false); }}
-              style={{ position: "absolute", right: "0.75rem", top: "50%", transform: "translateY(-50%)", color: "var(--text-muted)", cursor: "pointer" }}
+              onClick={() => setIsControlsOpen(false)}
+              style={{ 
+                background: "transparent", 
+                border: "none", 
+                color: "var(--text-muted)", 
+                cursor: "pointer",
+                fontSize: "0.85rem"
+              }}
             >
               ✕
             </button>
-          )}
-
-          {showSearchList && filteredSearchList.length > 0 && (
-            <div 
-              className="card" 
-              style={{ 
-                position: "absolute", 
-                top: "100%", 
-                left: 0, 
-                width: "100%", 
-                background: "var(--bg-secondary)", 
-                border: "1px solid var(--border-subtle)", 
-                borderRadius: "8px", 
-                marginTop: "0.25rem",
-                maxHeight: "220px",
-                overflowY: "auto",
-                padding: "0.25rem",
-                boxShadow: "0 10px 20px rgba(0,0,0,0.5)"
-              }}
-            >
-              {filteredSearchList.map(p => (
-                <button
-                  key={p.id}
-                  onClick={() => { setFocusId(p.id); setSearchQuery(""); setShowSearchList(false); }}
-                  className="list-item-hover"
-                  style={{ 
-                    display: "flex", 
-                    justifyContent: "space-between", 
-                    width: "100%", 
-                    padding: "0.5rem 0.75rem", 
-                    textAlign: "left", 
-                    borderRadius: "6px",
-                    fontSize: "0.85rem",
-                    color: "var(--text-primary)"
-                  }}
-                >
-                  <span>{p.firstName} {p.lastName.toUpperCase()}</span>
-                  <span style={{ color: "var(--text-muted)" }}>{p.birthDate ? p.birthDate.substring(0,4) : ""}</span>
-                </button>
-              ))}
-            </div>
-          )}
-        </div>
-
-        {/* Sélection du type d'arbre */}
-        <div className="input-group" style={{ marginBottom: 0 }}>
-          <label className="input-label" style={{ fontSize: "0.75rem" }}>Format d'Arbre</label>
-          <div style={{ display: "flex", gap: "0.25rem", background: "var(--bg-tertiary)", borderRadius: "8px", padding: "0.25rem" }}>
-            <button 
-              onClick={() => setLayoutMode("relative")}
-              style={{ 
-                flex: 1, 
-                padding: "0.4rem", 
-                fontSize: "0.75rem", 
-                borderRadius: "6px", 
-                fontWeight: 600,
-                background: layoutMode === "relative" ? "var(--accent-emerald)" : "transparent",
-                color: layoutMode === "relative" ? "white" : "var(--text-secondary)"
-              }}
-            >
-              ⚖️ Famille
-            </button>
-            <button 
-              onClick={() => setLayoutMode("pedigree")}
-              style={{ 
-                flex: 1, 
-                padding: "0.4rem", 
-                fontSize: "0.75rem", 
-                borderRadius: "6px", 
-                fontWeight: 600,
-                background: layoutMode === "pedigree" ? "var(--accent-emerald)" : "transparent",
-                color: layoutMode === "pedigree" ? "white" : "var(--text-secondary)"
-              }}
-            >
-              🌿 Ascendance
-            </button>
-            <button 
-              onClick={() => setLayoutMode("descendants")}
-              style={{ 
-                flex: 1, 
-                padding: "0.4rem", 
-                fontSize: "0.75rem", 
-                borderRadius: "6px", 
-                fontWeight: 600,
-                background: layoutMode === "descendants" ? "var(--accent-emerald)" : "transparent",
-                color: layoutMode === "descendants" ? "white" : "var(--text-secondary)"
-              }}
-            >
-              🍁 Descendance
-            </button>
           </div>
-        </div>
 
-        {/* Option générations (uniquement pour ascendance) */}
-        {layoutMode === "pedigree" && (
-          <div className="input-group" style={{ marginBottom: 0 }}>
-            <label className="input-label" style={{ fontSize: "0.75rem" }}>Nombre de Générations : {maxGenerations}</label>
+          <div style={{ position: "relative" }}>
             <input 
-              type="range" 
-              min="3" 
-              max="10" 
-              value={maxGenerations} 
-              onChange={(e) => setMaxGenerations(parseInt(e.target.value))}
-              style={{ accentColor: "var(--accent-emerald)", cursor: "pointer", width: "100%" }}
+              type="text" 
+              placeholder="🔍 Centrer sur un ancêtre..." 
+              value={searchQuery}
+              onChange={(e) => { setSearchQuery(e.target.value); setShowSearchList(true); }}
+              onFocus={() => setShowSearchList(true)}
+              className="input-field"
+              style={{ width: "100%", paddingRight: "2rem", fontSize: "0.85rem" }}
             />
-          </div>
-        )}
+            {searchQuery && (
+              <button 
+                onClick={() => { setSearchQuery(""); setShowSearchList(false); }}
+                style={{ position: "absolute", right: "0.75rem", top: "50%", transform: "translateY(-50%)", color: "var(--text-muted)", cursor: "pointer" }}
+              >
+                ✕
+              </button>
+            )}
 
-        {/* Caméra boutons rapides */}
-        <div style={{ display: "flex", gap: "0.5rem" }}>
-          <button onClick={fitToScreen} className="btn btn-secondary" style={{ flex: 1, padding: "0.4rem", fontSize: "0.75rem" }}>
-            🎯 Ajuster l'écran
-          </button>
-          <button 
-            onClick={() => {
-              if (!containerRef.current) return;
-              const nextZoom = Math.min(zoom + 0.15, 3);
-              const rect = containerRef.current.getBoundingClientRect();
-              setPan(p => ({
-                x: rect.width / 2 - (rect.width / 2 - p.x) * (nextZoom / zoom),
-                y: rect.height / 2 - (rect.height / 2 - p.y) * (nextZoom / zoom)
-              }));
-              setZoom(nextZoom);
-            }} 
-            className="btn btn-secondary" 
-            style={{ padding: "0.4rem 0.8rem", fontSize: "0.75rem" }}
-          >
-            ➕
-          </button>
-          <button 
-            onClick={() => {
-              if (!containerRef.current) return;
-              const nextZoom = Math.max(zoom - 0.15, 0.15);
-              const rect = containerRef.current.getBoundingClientRect();
-              setPan(p => ({
-                x: rect.width / 2 - (rect.width / 2 - p.x) * (nextZoom / zoom),
-                y: rect.height / 2 - (rect.height / 2 - p.y) * (nextZoom / zoom)
-              }));
-              setZoom(nextZoom);
-            }} 
-            className="btn btn-secondary" 
-            style={{ padding: "0.4rem 0.8rem", fontSize: "0.75rem" }}
-          >
-            ➖
-          </button>
-        </div>
+            {showSearchList && filteredSearchList.length > 0 && (
+              <div 
+                className="card" 
+                style={{ 
+                  position: "absolute", 
+                  top: "100%", 
+                  left: 0, 
+                  width: "100%", 
+                  background: "var(--bg-secondary)", 
+                  border: "1px solid var(--border-subtle)", 
+                  borderRadius: "8px", 
+                  marginTop: "0.25rem",
+                  maxHeight: "220px",
+                  overflowY: "auto",
+                  padding: "0.25rem",
+                  boxShadow: "0 10px 20px rgba(0,0,0,0.5)"
+                }}
+              >
+                {filteredSearchList.map(p => (
+                  <button
+                    key={p.id}
+                    onClick={() => { setFocusId(p.id); setSearchQuery(""); setShowSearchList(false); }}
+                    className="list-item-hover"
+                    style={{ 
+                      display: "flex", 
+                      justifyContent: "space-between", 
+                      width: "100%", 
+                      padding: "0.5rem 0.75rem", 
+                      textAlign: "left", 
+                      borderRadius: "6px",
+                      fontSize: "0.85rem",
+                      color: "var(--text-primary)"
+                    }}
+                  >
+                    <span>{p.firstName} {p.lastName.toUpperCase()}</span>
+                    <span style={{ color: "var(--text-muted)" }}>{p.birthDate ? p.birthDate.substring(0,4) : ""}</span>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
 
-        {/* Légende de Lignée (Colorimétrie progressive) */}
-        <div style={{ borderTop: "1px solid var(--border-subtle)", paddingTop: "0.75rem", marginTop: "0.25rem", display: "flex", flexDirection: "column", gap: "0.5rem" }}>
-          <span style={{ fontSize: "0.68rem", fontWeight: 700, color: "var(--text-secondary)", textTransform: "uppercase", letterSpacing: "0.05em" }}>
-            ⚖️ Intensité de la Lignée
-          </span>
-          <div style={{ display: "flex", flexDirection: "column", gap: "0.4rem" }}>
-            <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", fontSize: "0.7rem" }}>
-              <span style={{ width: "12px", height: "12px", borderRadius: "3.5px", background: "linear-gradient(135deg, rgba(59, 130, 246, 0.35), rgba(236, 72, 153, 0.35))", border: "1.5px solid rgba(255,255,255,0.4)" }}></span>
-              <span style={{ color: "var(--text-primary)", fontWeight: 600 }}>Lignée Directe</span>
-              <span style={{ color: "var(--text-muted)", marginLeft: "auto", fontSize: "0.65rem" }}>Asc. / Desc. directs</span>
+          {/* Sélection du type d'arbre */}
+          <div className="input-group" style={{ marginBottom: 0 }}>
+            <label className="input-label" style={{ fontSize: "0.75rem" }}>Format d'Arbre</label>
+            <div style={{ display: "flex", gap: "0.25rem", background: "var(--bg-tertiary)", borderRadius: "8px", padding: "0.25rem" }}>
+              <button 
+                onClick={() => setLayoutMode("relative")}
+                style={{ 
+                  flex: 1, 
+                  padding: "0.4rem", 
+                  fontSize: "0.75rem", 
+                  borderRadius: "6px", 
+                  fontWeight: 600,
+                  background: layoutMode === "relative" ? "var(--accent-emerald)" : "transparent",
+                  color: layoutMode === "relative" ? "white" : "var(--text-secondary)"
+                }}
+              >
+                ⚖️ Famille
+              </button>
+              <button 
+                onClick={() => setLayoutMode("pedigree")}
+                style={{ 
+                  flex: 1, 
+                  padding: "0.4rem", 
+                  fontSize: "0.75rem", 
+                  borderRadius: "6px", 
+                  fontWeight: 600,
+                  background: layoutMode === "pedigree" ? "var(--accent-emerald)" : "transparent",
+                  color: layoutMode === "pedigree" ? "white" : "var(--text-secondary)"
+                }}
+              >
+                🌿 Ascendance
+              </button>
+              <button 
+                onClick={() => setLayoutMode("descendants")}
+                style={{ 
+                  flex: 1, 
+                  padding: "0.4rem", 
+                  fontSize: "0.75rem", 
+                  borderRadius: "6px", 
+                  fontWeight: 600,
+                  background: layoutMode === "descendants" ? "var(--accent-emerald)" : "transparent",
+                  color: layoutMode === "descendants" ? "white" : "var(--text-secondary)"
+                }}
+              >
+                🍁 Descendance
+              </button>
             </div>
-            <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", fontSize: "0.7rem" }}>
-              <span style={{ width: "12px", height: "12px", borderRadius: "3.5px", background: "rgba(156, 163, 175, 0.08)", border: "1.5px solid rgba(156, 163, 175, 0.3)" }}></span>
-              <span style={{ color: "var(--text-secondary)" }}>1er degré indirect</span>
-              <span style={{ color: "var(--text-muted)", marginLeft: "auto", fontSize: "0.65rem" }}>Frères, Conjoints</span>
+          </div>
+
+          {/* Option générations (uniquement pour ascendance) */}
+          {layoutMode === "pedigree" && (
+            <div className="input-group" style={{ marginBottom: 0 }}>
+              <label className="input-label" style={{ fontSize: "0.75rem" }}>Nombre de Générations : {maxGenerations}</label>
+              <input 
+                type="range" 
+                min="3" 
+                max="10" 
+                value={maxGenerations} 
+                onChange={(e) => setMaxGenerations(parseInt(e.target.value))}
+                style={{ accentColor: "var(--accent-emerald)", cursor: "pointer", width: "100%" }}
+              />
             </div>
-            <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", fontSize: "0.7rem" }}>
-              <span style={{ width: "12px", height: "12px", borderRadius: "3.5px", background: "rgba(148, 163, 184, 0.04)", border: "1px dashed rgba(148, 163, 184, 0.25)" }}></span>
-              <span style={{ color: "var(--text-muted)" }}>2e degré indirect</span>
-              <span style={{ color: "var(--text-muted)", marginLeft: "auto", fontSize: "0.65rem" }}>Oncles, Neveux</span>
-            </div>
-            <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", fontSize: "0.7rem" }}>
-              <span style={{ width: "12px", height: "12px", borderRadius: "3.5px", background: "rgba(148, 163, 184, 0.02)", border: "1px dotted rgba(148, 163, 184, 0.15)", opacity: 0.55 }}></span>
-              <span style={{ color: "var(--text-muted)", opacity: 0.7 }}>Branches distantes</span>
-              <span style={{ color: "var(--text-muted)", marginLeft: "auto", fontSize: "0.65rem", opacity: 0.7 }}>Cousins éloignés</span>
+          )}
+
+          {/* Caméra boutons rapides */}
+          <div style={{ display: "flex", gap: "0.5rem" }}>
+            <button onClick={fitToScreen} className="btn btn-secondary" style={{ flex: 1, padding: "0.4rem", fontSize: "0.75rem" }}>
+              🎯 Ajuster l'écran
+            </button>
+            <button 
+              onClick={() => {
+                if (!containerRef.current) return;
+                const nextZoom = Math.min(zoom + 0.15, 3);
+                const rect = containerRef.current.getBoundingClientRect();
+                setPan(p => ({
+                  x: rect.width / 2 - (rect.width / 2 - p.x) * (nextZoom / zoom),
+                  y: rect.height / 2 - (rect.height / 2 - p.y) * (nextZoom / zoom)
+                }));
+                setZoom(nextZoom);
+              }} 
+              className="btn btn-secondary" 
+              style={{ padding: "0.4rem 0.8rem", fontSize: "0.75rem" }}
+            >
+              ➕
+            </button>
+            <button 
+              onClick={() => {
+                if (!containerRef.current) return;
+                const nextZoom = Math.max(zoom - 0.15, 0.15);
+                const rect = containerRef.current.getBoundingClientRect();
+                setPan(p => ({
+                  x: rect.width / 2 - (rect.width / 2 - p.x) * (nextZoom / zoom),
+                  y: rect.height / 2 - (rect.height / 2 - p.y) * (nextZoom / zoom)
+                }));
+                setZoom(nextZoom);
+              }} 
+              className="btn btn-secondary" 
+              style={{ padding: "0.4rem 0.8rem", fontSize: "0.75rem" }}
+            >
+              ➖
+            </button>
+          </div>
+
+          {/* Légende de Lignée (Colorimétrie progressive) */}
+          <div style={{ borderTop: "1px solid var(--border-subtle)", paddingTop: "0.75rem", marginTop: "0.25rem", display: "flex", flexDirection: "column", gap: "0.5rem" }}>
+            <span style={{ fontSize: "0.68rem", fontWeight: 700, color: "var(--text-secondary)", textTransform: "uppercase", letterSpacing: "0.05em" }}>
+              ⚖️ Intensité de la Lignée
+            </span>
+            <div style={{ display: "flex", flexDirection: "column", gap: "0.4rem" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", fontSize: "0.7rem" }}>
+                <span style={{ width: "12px", height: "12px", borderRadius: "3.5px", background: "linear-gradient(135deg, rgba(59, 130, 246, 0.35), rgba(236, 72, 153, 0.35))", border: "1.5px solid rgba(255,255,255,0.4)" }}></span>
+                <span style={{ color: "var(--text-primary)", fontWeight: 600 }}>Lignée Directe</span>
+                <span style={{ color: "var(--text-muted)", marginLeft: "auto", fontSize: "0.65rem" }}>Asc. / Desc. directs</span>
+              </div>
+              <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", fontSize: "0.7rem" }}>
+                <span style={{ width: "12px", height: "12px", borderRadius: "3.5px", background: "rgba(156, 163, 175, 0.08)", border: "1.5px solid rgba(156, 163, 175, 0.3)" }}></span>
+                <span style={{ color: "var(--text-secondary)" }}>1er degré indirect</span>
+                <span style={{ color: "var(--text-muted)", marginLeft: "auto", fontSize: "0.65rem" }}>Frères, Conjoints</span>
+              </div>
+              <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", fontSize: "0.7rem" }}>
+                <span style={{ width: "12px", height: "12px", borderRadius: "3.5px", background: "rgba(148, 163, 184, 0.04)", border: "1px dashed rgba(148, 163, 184, 0.25)" }}></span>
+                <span style={{ color: "var(--text-muted)" }}>2e degré indirect</span>
+                <span style={{ color: "var(--text-muted)", marginLeft: "auto", fontSize: "0.65rem" }}>Oncles, Neveux</span>
+              </div>
+              <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", fontSize: "0.7rem" }}>
+                <span style={{ width: "12px", height: "12px", borderRadius: "3.5px", background: "rgba(148, 163, 184, 0.02)", border: "1px dotted rgba(148, 163, 184, 0.15)", opacity: 0.55 }}></span>
+                <span style={{ color: "var(--text-muted)", opacity: 0.7 }}>Branches distantes</span>
+                <span style={{ color: "var(--text-muted)", marginLeft: "auto", fontSize: "0.65rem", opacity: 0.7 }}>Cousins éloignés</span>
+              </div>
             </div>
           </div>
         </div>
-      </div>
+      ) : (
+        /* BOUTON FLOTTANT D'OUVERTURE DES CONTROLES SI FERMÉ */
+        <button
+          onClick={() => setIsControlsOpen(true)}
+          className="glass btn-hover"
+          style={{
+            position: "absolute",
+            top: "1rem",
+            left: "1rem",
+            zIndex: 10,
+            padding: "0.6rem 1rem",
+            borderRadius: "8px",
+            border: "1px solid var(--border-subtle)",
+            background: "rgba(18, 18, 18, 0.75)",
+            backdropFilter: "blur(12px)",
+            color: "var(--accent-gold)",
+            fontSize: "0.8rem",
+            fontWeight: 600,
+            display: "flex",
+            alignItems: "center",
+            gap: "0.4rem",
+            boxShadow: "0 4px 12px rgba(0,0,0,0.15)",
+            cursor: "pointer",
+            transition: "all 0.2s"
+          }}
+        >
+          ⚙️ <span>Contrôles</span>
+        </button>
+      )}
 
       {/* 2. LE CANVAS SVG DE RENDU DE L'ARBRE */}
       <div 
@@ -1558,13 +1622,13 @@ export default function InteractiveTreeClient({ people, unions }: InteractiveTre
 
       {/* 3. AIDE CONTEXTUELLE FLOTTANTE */}
       <div 
-        className="glass" 
+        className="glass help-text-floating" 
         style={{ 
           position: "absolute", 
           bottom: "1rem", 
           right: "1rem", 
           padding: "0.5rem 1rem", 
-          fontSize: "0.8rem", 
+          fontSize: "0.85rem", 
           color: "var(--text-secondary)",
           pointerEvents: "none"
         }}
@@ -1582,7 +1646,7 @@ export default function InteractiveTreeClient({ people, unions }: InteractiveTre
           });
           setQuickCreateModalOpen(true);
         }}
-        className="btn btn-accent shadow-lg"
+        className="btn btn-accent shadow-lg quick-create-floating"
         style={{
           position: "absolute",
           bottom: "1rem",
