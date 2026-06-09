@@ -5,6 +5,7 @@ on:
     branches:
       - main
       - master
+      - develop
 
 permissions:
   contents: write
@@ -43,24 +44,33 @@ jobs:
         run: npm run build
 
       - name: Run Semantic Release
+        if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: npx semantic-release --debug
 
       - name: Build and Push Docker Image
         run: |
-          git fetch --tags
-          VERSION=$(git describe --tags --abbrev=0 2>/dev/null || echo "v0.0.0")
-          VERSION_NO_V=${VERSION#v}
-          echo "Version found: $VERSION ($VERSION_NO_V)"
-          
           echo "Logging in to Docker Registry..."
           docker login registry.robin-joseph.fr -u dummy -p dummy
           
-          echo "Building Docker Image..."
-          docker build --build-arg NEXT_PUBLIC_APP_VERSION=$VERSION_NO_V -t registry.robin-joseph.fr/ancestors:latest -t registry.robin-joseph.fr/ancestors:$VERSION -t registry.robin-joseph.fr/ancestors:$VERSION_NO_V .
-          
-          echo "Pushing Docker Images..."
-          docker push registry.robin-joseph.fr/ancestors:latest
-          docker push registry.robin-joseph.fr/ancestors:$VERSION
-          docker push registry.robin-joseph.fr/ancestors:$VERSION_NO_V
+          if [ "${{ github.ref }}" = "refs/heads/main" ] || [ "${{ github.ref }}" = "refs/heads/master" ]; then
+            git fetch --tags
+            VERSION=$(git describe --tags --abbrev=0 2>/dev/null || echo "v0.0.0")
+            VERSION_NO_V=${VERSION#v}
+            echo "Version found: $VERSION ($VERSION_NO_V)"
+            
+            echo "Building Production Docker Image..."
+            docker build --build-arg NEXT_PUBLIC_APP_VERSION=$VERSION_NO_V -t registry.robin-joseph.fr/ancestors:latest -t registry.robin-joseph.fr/ancestors:$VERSION -t registry.robin-joseph.fr/ancestors:$VERSION_NO_V .
+            
+            echo "Pushing Production Docker Images..."
+            docker push registry.robin-joseph.fr/ancestors:latest
+            docker push registry.robin-joseph.fr/ancestors:$VERSION
+            docker push registry.robin-joseph.fr/ancestors:$VERSION_NO_V
+          else
+            echo "Building Preprod Docker Image..."
+            docker build --build-arg NEXT_PUBLIC_APP_VERSION=preprod -t registry.robin-joseph.fr/ancestors:preprod .
+            
+            echo "Pushing Preprod Docker Image..."
+            docker push registry.robin-joseph.fr/ancestors:preprod
+          fi

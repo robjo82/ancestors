@@ -28,6 +28,7 @@ export default function NavbarClient({ user, trees, activeTreeId }: NavbarClient
   const pathname = usePathname();
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const [theme, setTheme] = useState<"dark" | "light">("dark");
+  const [isMobileOpen, setIsMobileOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
   const activeTree = trees.find((t) => t.id === activeTreeId) || trees[0];
@@ -235,7 +236,7 @@ export default function NavbarClient({ user, trees, activeTreeId }: NavbarClient
       </nav>
 
       {/* User Controls */}
-      <div style={{ display: "flex", alignItems: "center", gap: "1rem", marginLeft: "auto" }}>
+      <div className="navbar-user-controls" style={{ display: "flex", alignItems: "center", gap: "1rem", marginLeft: "auto" }}>
         {/* Theme Toggle Button */}
         <button
           onClick={toggleTheme}
@@ -327,6 +328,86 @@ export default function NavbarClient({ user, trees, activeTreeId }: NavbarClient
           🚪 Déconnexion
         </button>
       </div>
+
+      {/* Burger Button for Mobile */}
+      <button 
+        onClick={() => setIsMobileOpen(!isMobileOpen)}
+        style={{
+          display: "none",
+          background: "transparent",
+          border: "none",
+          fontSize: "1.5rem",
+          cursor: "pointer",
+          color: "var(--text-primary)",
+          padding: "0.25rem 0.5rem",
+          borderRadius: "6px",
+          marginLeft: "auto"
+        }}
+        className="navbar-burger"
+      >
+        {isMobileOpen ? "✕" : "☰"}
+      </button>
+
+      {/* Mobile Menu Overlay */}
+      {isMobileOpen && (
+        <div className="navbar-mobile-menu glass" style={{ width: "100%" }}>
+          <div className="navbar-mobile-links" style={{ display: "flex", flexDirection: "column", gap: "0.4rem" }}>
+            <Link href="/" onClick={() => setIsMobileOpen(false)} className={`navbar-mobile-link ${pathname === "/" ? "active" : ""}`}>
+              📊 Tableau
+            </Link>
+            <Link href="/tree" onClick={() => setIsMobileOpen(false)} className={`navbar-mobile-link ${pathname === "/tree" ? "active" : ""}`}>
+              🌿 Arbre
+            </Link>
+            <Link href="/people" onClick={() => setIsMobileOpen(false)} className={`navbar-mobile-link ${pathname.startsWith("/people") ? "active" : ""}`}>
+              📇 Annuaire
+            </Link>
+            <Link href="/statistics" onClick={() => setIsMobileOpen(false)} className={`navbar-mobile-link ${pathname === "/statistics" ? "active" : ""}`}>
+              📈 Stats
+            </Link>
+            <Link href="/import-export" onClick={() => setIsMobileOpen(false)} className={`navbar-mobile-link ${pathname === "/import-export" ? "active" : ""}`}>
+              📤 GEDCOM
+            </Link>
+            {user.isAdmin && (
+              <Link href="/admin" onClick={() => setIsMobileOpen(false)} className={`navbar-mobile-link ${pathname.startsWith("/admin") ? "active" : ""}`}>
+                🛠️ Admin
+              </Link>
+            )}
+          </div>
+          <div className="navbar-mobile-user" style={{ display: "flex", flexDirection: "column", gap: "0.75rem", borderTop: "1px solid var(--border-subtle)", paddingTop: "1rem", marginTop: "0.5rem" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: "1rem", justifyContent: "space-between" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+                <div style={{ width: "32px", height: "32px", borderRadius: "50%", background: "var(--accent-gold)", color: "#000", fontWeight: 700, fontSize: "0.9rem", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                  {user.name ? user.name.substring(0, 2).toUpperCase() : user.email.substring(0, 2).toUpperCase()}
+                </div>
+                <span style={{ fontSize: "0.9rem", color: "var(--text-secondary)" }}>{user.name || user.email}</span>
+              </div>
+              <button
+                onClick={toggleTheme}
+                style={{ fontSize: "1.2rem", padding: "0.5rem", borderRadius: "50%", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", width: "38px", height: "38px", background: "var(--bg-tertiary)", border: "1px solid var(--border-subtle)", color: "var(--text-primary)" }}
+              >
+                {theme === "dark" ? "☀️" : "🌙"}
+              </button>
+            </div>
+            <div style={{ display: "flex", gap: "0.5rem", marginTop: "0.5rem" }}>
+              <Link
+                href="/settings"
+                onClick={() => setIsMobileOpen(false)}
+                className="btn btn-secondary"
+                style={{ flex: 1, padding: "0.5rem", fontSize: "0.85rem", display: "flex", alignItems: "center", justifyContent: "center", gap: "0.25rem", textDecoration: "none" }}
+              >
+                ⚙️ Paramètres
+              </Link>
+              <button
+                onClick={() => { setIsMobileOpen(false); handleLogout(); }}
+                className="btn btn-secondary"
+                style={{ flex: 1, padding: "0.5rem", fontSize: "0.85rem" }}
+              >
+                🚪 Déconnexion
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </header>
   );
 }
